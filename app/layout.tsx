@@ -2,6 +2,11 @@ import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { CounterpartyProvider } from '@/lib/counterparty-context'
+import { Providers } from '@/components/providers'
+import { PrimeThemeLoader } from '@/components/prime-theme-loader'
+import 'primereact/resources/themes/lara-dark-teal/theme.css'
+import 'primereact/resources/primereact.css'
+import 'primeicons/primeicons.css'
 import './globals.css'
 
 const _geist = Geist({ subsets: ["latin"] });
@@ -36,11 +41,14 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className="font-sans antialiased">
-        <CounterpartyProvider>
-          {children}
-        </CounterpartyProvider>
+        <Providers>
+          <PrimeThemeLoader />
+          <CounterpartyProvider>
+            {children}
+          </CounterpartyProvider>
+        </Providers>
         <Analytics />
       </body>
     </html>

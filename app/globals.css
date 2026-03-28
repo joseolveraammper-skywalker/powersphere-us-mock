@@ -124,3 +124,150 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ── PrimeReact Brand Overrides ──────────────────────────────── */
+:root {
+  /* Primary → brand red */
+  --primary-color: #cc1111;
+  --primary-color-text: #ffffff;
+  --highlight-bg: rgba(204, 17, 17, 0.14);
+  --highlight-text-color: #cc1111;
+  --focus-ring: 0 0 0 0.2rem rgba(204, 17, 17, 0.2);
+
+  /* Keep PrimeReact surfaces in line with dark theme */
+  --surface-ground: #0f1117;
+  --surface-section: #141720;
+  --surface-card: #1a1f2e;
+  --surface-overlay: #1a1f2e;
+  --surface-border: #2a2f3e;
+  --surface-hover: #222840;
+}
+
+/* Button primary */
+.p-button.p-button-primary,
+.p-button:not(.p-button-outlined):not(.p-button-text):not(.p-button-link):not(.p-button-secondary):not(.p-button-success):not(.p-button-info):not(.p-button-warning):not(.p-button-danger):not(.p-button-help) {
+  background: #cc1111;
+  border-color: #cc1111;
+}
+.p-button.p-button-primary:enabled:hover,
+.p-button:not(.p-button-outlined):not(.p-button-text):not(.p-button-link):not(.p-button-secondary):not(.p-button-success):not(.p-button-info):not(.p-button-warning):not(.p-button-danger):not(.p-button-help):enabled:hover {
+  background: #aa0e0e;
+  border-color: #aa0e0e;
+}
+
+/* Tag / Badge primary */
+.p-tag.p-tag-primary { background: #cc1111; }
+
+/* Highlight in DataTable rows */
+.p-datatable .p-datatable-tbody > tr.p-highlight {
+  background: rgba(204, 17, 17, 0.14);
+  color: #cc1111;
+}
+
+/* Checkbox / Radio checked state */
+.p-checkbox .p-checkbox-box.p-highlight,
+.p-radiobutton .p-radiobutton-box.p-highlight {
+  background: #cc1111;
+  border-color: #cc1111;
+}
+
+/* InputSwitch checked */
+.p-inputswitch.p-inputswitch-checked .p-inputswitch-slider {
+  background: #cc1111;
+}
+
+/* PanelMenu active item */
+.p-panelmenu .p-panelmenu-header.p-highlight > a {
+  color: #cc1111;
+}
+
+/* Link / anchor color */
+a { color: #cc1111; }
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--surface-ground, #0f1117); }
+::-webkit-scrollbar-thumb { background: #2a2f3e; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #3a3f50; }
+
+/* ── Light mode overrides ──────────────────────────────────────── */
+/* When next-themes sets class="light" on <html>, override PrimeReact
+   dark surfaces with clean light equivalents. Brand red stays the same. */
+html.light {
+  --surface-ground:   #f4f6f9;
+  --surface-section:  #eef1f5;
+  --surface-card:     #ffffff;
+  --surface-overlay:  #ffffff;
+  --surface-border:   #d8dde6;
+  --surface-hover:    #e8edf4;
+  --text-color:               #1a1a2e;
+  --text-color-secondary:     #6b7280;
+
+  /* PrimeReact internal vars the Lara Dark theme overrides */
+  --p-surface-0:   #ffffff;
+  --p-surface-50:  #f8f9fa;
+  --p-surface-100: #f0f2f5;
+  --p-surface-200: #e9ecef;
+  --p-surface-300: #dee2e6;
+  --p-surface-400: #ced4da;
+  --p-surface-500: #adb5bd;
+  --p-surface-600: #6c757d;
+  --p-surface-700: #495057;
+  --p-surface-800: #343a40;
+  --p-surface-900: #212529;
+
+  /* text & border in light mode */
+  --p-text-color:           #1a1a2e;
+  --p-text-muted-color:     #6b7280;
+  --p-content-border-color: #d8dde6;
+  color-scheme: light;
+}
+
+/* Component-level light overrides */
+html.light body { background: #f4f6f9; color: #1a1a2e; }
+
+html.light .p-datatable .p-datatable-thead > tr > th {
+  background: #f0f2f5;
+  color: #1a1a2e;
+  border-color: #d8dde6;
+}
+html.light .p-datatable .p-datatable-tbody > tr {
+  background: #ffffff;
+  color: #1a1a2e;
+}
+html.light .p-datatable .p-datatable-tbody > tr:nth-child(even) {
+  background: #f8f9fb;
+}
+html.light .p-datatable .p-datatable-tbody > tr:hover {
+  background: #eef1f5 !important;
+}
+
+html.light .p-dialog { background: #ffffff; color: #1a1a2e; }
+html.light .p-dialog .p-dialog-header { background: #f0f2f5; color: #1a1a2e; border-color: #d8dde6; }
+html.light .p-dialog .p-dialog-content { background: #ffffff; color: #1a1a2e; }
+
+html.light .p-dropdown { background: #ffffff; border-color: #d8dde6; color: #1a1a2e; }
+html.light .p-dropdown-panel { background: #ffffff; border-color: #d8dde6; }
+html.light .p-dropdown-item { color: #1a1a2e; }
+html.light .p-dropdown-item:hover { background: #eef1f5; }
+
+html.light .p-inputtext { background: #ffffff; border-color: #d8dde6; color: #1a1a2e; }
+
+html.light .p-tabview .p-tabview-nav { background: #f0f2f5; border-color: #d8dde6; }
+html.light .p-tabview .p-tabview-nav li .p-tabview-nav-link { background: transparent; color: #6b7280; }
+html.light .p-tabview .p-tabview-nav li.p-highlight .p-tabview-nav-link { color: #cc1111; border-color: #cc1111; background: transparent; }
+html.light .p-tabview .p-tabview-panels { background: #ffffff; }
+
+html.light .p-toolbar { background: #ffffff; border-color: #d8dde6; }
+html.light .p-menu { background: #ffffff; border-color: #d8dde6; }
+html.light .p-menu .p-menuitem-link { color: #1a1a2e; }
+html.light .p-menu .p-menuitem-link:hover { background: #eef1f5; }
+html.light .p-menu .p-menuitem-link .p-menuitem-text { color: #1a1a2e; }
+html.light .p-menu .p-menuitem-link .p-menuitem-icon { color: #6b7280; }
+
+html.light .p-button.p-button-text { color: #1a1a2e; }
+html.light .p-button.p-button-text:hover { background: #eef1f5; }
+
+html.light ::-webkit-scrollbar-track { background: #f4f6f9; }
+html.light ::-webkit-scrollbar-thumb { background: #c8d0dc; }
+html.light ::-webkit-scrollbar-thumb:hover { background: #b0bac8; }
