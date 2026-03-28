@@ -131,13 +131,13 @@ function StatusPill({ status }: { status: string }) {
 // ── Main page ──────────────────────────────────────────────────────────────
 export default function ClientConfigurationPage() {
   const { counterparties, addCounterparty, updateCounterparty, deleteCounterparty } = useCounterparties()
-  const [activeTab, setActiveTab] = useState(0)
-  const [participantType, setParticipantType] = useState<"market" | "non-participant">("market")
+  const [activeTab, setActiveTab] = useState<"external" | "internal">("external")
+  const [externalChip, setExternalChip] = useState<"board" | "configuration">("board")
+  const [internalChip, setInternalChip] = useState<"board" | "configuration">("board")
   const [selectedClientType, setSelectedClientType] = useState<string>("counterparty")
   const [expandedSites, setExpandedSites] = useState<string[]>([])
 
-  const emptyForm = buildEmptyForm()
-  const [formData, setFormData] = useState(emptyForm)
+  const [formData, setFormData] = useState(buildEmptyForm())
 
   const handleInputChange = (field: string, value: string | boolean) => {
     if (field.startsWith("programs.")) {
@@ -172,21 +172,24 @@ export default function ClientConfigurationPage() {
     setExpandedSites([])
   }
 
-  const tabs = [
-    { label: "Client Board",        icon: "pi pi-users" },
-    { label: "Client Registration", icon: "pi pi-user-plus" },
+  const tabs: { key: "external" | "internal"; label: string; icon: string }[] = [
+    { key: "external", label: "External", icon: "pi pi-table" },
+    { key: "internal", label: "Internal", icon: "pi pi-table" },
   ]
+
+  const activeChip = activeTab === "external" ? externalChip : internalChip
+  const setActiveChip = activeTab === "external" ? setExternalChip : setInternalChip
 
   return (
     <DashboardLayout pageTitle="Client Configuration">
       {/* ── Underline Tab Bar ── */}
-      <div style={{ display: "flex", alignItems: "flex-end", borderBottom: BORDER, marginBottom: "1.5rem" }}>
-        {tabs.map((tab, i) => {
-          const active = activeTab === i
+      <div style={{ display: "flex", alignItems: "flex-end", borderBottom: BORDER, marginBottom: "1.25rem" }}>
+        {tabs.map(tab => {
+          const active = activeTab === tab.key
           return (
             <button
-              key={tab.label}
-              onClick={() => setActiveTab(i)}
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
               style={{
                 display: "flex", alignItems: "center", gap: "0.4rem",
                 padding: "0.65rem 1.1rem",
@@ -205,49 +208,54 @@ export default function ClientConfigurationPage() {
         })}
       </div>
 
-      {activeTab === 0 && (
+      {/* ── Sub-chips ── */}
+      <div style={{ display: "flex", gap: 8, marginBottom: "1.25rem" }}>
+        {(["board", "configuration"] as const).map(chip => (
+          <button
+            key={chip}
+            onClick={() => setActiveChip(chip)}
+            style={{
+              padding: "0.3rem 1rem", borderRadius: 999, fontSize: 12,
+              fontWeight: activeChip === chip ? 600 : 400,
+              background: activeChip === chip ? "var(--surface-card)" : "transparent",
+              color: activeChip === chip ? "var(--text-color)" : "var(--text-color-secondary)",
+              border: `1px solid ${activeChip === chip ? "var(--surface-border)" : "transparent"}`,
+              cursor: "pointer",
+              boxShadow: activeChip === chip ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+            }}
+          >
+            {chip.charAt(0).toUpperCase() + chip.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      {/* ── External tab content ── */}
+      {activeTab === "external" && activeChip === "board" && (
         <ClientBoardTab
           counterparties={counterparties}
           onDelete={deleteCounterparty}
           onUpdate={updateCounterparty}
         />
       )}
+      {activeTab === "external" && activeChip === "configuration" && (
+        <ClientRegistrationTab
+          selectedClientType={selectedClientType}
+          onClientTypeChange={setSelectedClientType}
+          formData={formData}
+          onInputChange={handleInputChange}
+          onSubmit={handleSubmit}
+          setFormData={setFormData}
+          expandedSites={expandedSites}
+          setExpandedSites={setExpandedSites}
+        />
+      )}
 
-      {activeTab === 1 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          {/* Participant type pills */}
-          <div style={{ display: "flex", gap: 8 }}>
-            {(["market", "non-participant"] as const).map(pt => (
-              <button
-                key={pt}
-                onClick={() => setParticipantType(pt)}
-                style={{
-                  padding: "0.3rem 1rem", borderRadius: 999, fontSize: 12, fontWeight: 500,
-                  background: participantType === pt ? "#cc1111" : "var(--surface-card)",
-                  color: participantType === pt ? "#fff" : "var(--text-color-secondary)",
-                  border: `1px solid ${participantType === pt ? "#cc1111" : "var(--surface-border)"}`,
-                  cursor: "pointer",
-                }}
-              >
-                {pt === "market" ? "Market participant" : "Non-participant"}
-              </button>
-            ))}
-          </div>
-
-          {participantType === "market" && (
-            <ClientRegistrationTab
-              selectedClientType={selectedClientType}
-              onClientTypeChange={setSelectedClientType}
-              formData={formData}
-              onInputChange={handleInputChange}
-              onSubmit={handleSubmit}
-              setFormData={setFormData}
-              expandedSites={expandedSites}
-              setExpandedSites={setExpandedSites}
-            />
-          )}
-          {participantType === "non-participant" && <NonParticipantRegistrationTab />}
-        </div>
+      {/* ── Internal tab content ── */}
+      {activeTab === "internal" && activeChip === "board" && (
+        <InternalBoardTab />
+      )}
+      {activeTab === "internal" && activeChip === "configuration" && (
+        <NonParticipantRegistrationTab />
       )}
     </DashboardLayout>
   )
@@ -489,6 +497,33 @@ function ClientBoardTab({
           <Column header="Contact" body={contactBody} style={{ minWidth: 180 }} />
           <Column header="Status" body={statusBody} style={{ width: 100 }} />
           <Column header="" body={actionsBody} style={{ width: 90 }} />
+        </DataTable>
+      </div>
+    </div>
+  )
+}
+
+// ── Internal Board Tab ─────────────────────────────────────────────────────
+function InternalBoardTab() {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+      <div style={{ borderRadius: 16, overflow: "hidden", border: BORDER }}>
+        <DataTable
+          value={[]}
+          size="small"
+          emptyMessage="No internal operators registered yet. Go to Configuration to add one."
+          style={{ background: "var(--surface-card)" }}
+          pt={{
+            thead: { style: { background: "var(--surface-card)" } },
+            tbody: { style: { background: "var(--surface-card)" } },
+            column: { headerCell: { style: thStyle }, bodyCell: { style: tdStyle } },
+          }}
+        >
+          <Column field="operatorName" header="Operator Name" style={{ minWidth: 180 }} />
+          <Column field="operatorId"   header="Operator ID"   style={{ width: 140, fontFamily: "monospace", fontSize: 12 }} />
+          <Column field="email"        header="Email"         style={{ minWidth: 200 }} />
+          <Column field="phoneNumber"  header="Phone"         style={{ width: 140 }} />
+          <Column field="modules"      header="Module Access" style={{ minWidth: 200 }} />
         </DataTable>
       </div>
     </div>
