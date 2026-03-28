@@ -1,17 +1,16 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useRef } from "react"
 import { DashboardLayout } from "@/components/power-sphere/dashboard-layout"
 import { DataTable } from "primereact/datatable"
 import { Column } from "primereact/column"
 import { Button } from "primereact/button"
-import { Tag } from "primereact/tag"
 import { Dialog } from "primereact/dialog"
 import { InputText } from "primereact/inputtext"
 import { Dropdown } from "primereact/dropdown"
-import { TabView, TabPanel } from "primereact/tabview"
 import type { DataTableExpandedRows } from "primereact/datatable"
-import { FileText, Upload, AlertTriangle, Clock, Check } from "lucide-react"
+import { FileText, Check } from "lucide-react"
+import { DailyLog, type DailyLogHandle } from "./DailyLog"
 
 // ============ REPORTS REPOSITORY DATA ============
 const mockReports = [
@@ -26,21 +25,12 @@ const mockReports = [
   { id: 9, report: "Energy Trading Summary", uploadedDate: "03-02-2026", resourceType: "GEN", customer: "Wild Duck Bar & Grill LLC", asset: "Commercial Unit", validation1: true, validation2: true },
 ]
 
-// ============ DAILY LOG DATA ============
+// ============ UPLOAD ASSET → RESOURCE TYPE MAP ============
 const assetResourceTypeMap: Record<string, string> = {
   "Wind Farm Alpha": "NCLR", "Plant B-12": "ESR", "Portfolio C": "GEN",
   "Solar Array Delta": "NCLR", "Gas Turbine Unit 3": "ESR", "Portfolio A": "GEN",
   "Facility East": "NCLR", "Plant C-7": "ESR", "Commercial Unit": "GEN", "Building Complex A": "GEN",
 }
-
-const mockDailyLogs = [
-  { id: 1, shiftOperator: "Rodriguez, M.", customer: "Texas Energy Co.", asset: "Wind Farm Alpha", eventBegin: "03/10/2026 08:15", eventDescriptor: "Turbine T-12 offline - bearing overheat", eventRestore: "03/10/2026 14:30", duration: "6h 15m", severity: "High", eventDetails: "Initial: Bearing temperature exceeded 180F threshold. Investigation: Maintenance crew dispatched to site. Resolution: Bearing replaced, turbine back online.", actionsTaken: "Dispatched maintenance crew at 08:22. Ordered replacement bearing from regional warehouse. Performed full diagnostic on adjacent turbines. Updated preventive maintenance schedule." },
-  { id: 2, shiftOperator: "Chen, L.", customer: "Midwest Industrial", asset: "Plant B-12", eventBegin: "03/10/2026 11:45", eventDescriptor: "Load curtailment request from ERCOT", eventRestore: "03/10/2026 13:00", duration: "1h 15m", severity: "Medium", eventDetails: "Notification: ERCOT issued EEA Level 1 alert. Response: Curtailed load per contract terms. Completion: Normal operations resumed after all-clear.", actionsTaken: "Notified customer operations team. Reduced load by 50MW as contracted. Documented compliance for settlement." },
-  { id: 3, shiftOperator: "Patel, A.", customer: "Commercial Partners LLC", asset: "Portfolio C", eventBegin: "03/10/2026 06:00", eventDescriptor: "Scheduled DR event - morning peak", eventRestore: "03/10/2026 09:00", duration: "3h 00m", severity: "Low", eventDetails: "Scheduled: Pre-planned demand response event. Execution: All sites responded within parameters. Complete: Event concluded successfully.", actionsTaken: "Sent 24-hour advance notification to all sites. Confirmed participation from 12 of 12 sites. Generated performance report for billing." },
-  { id: 4, shiftOperator: "Williams, J.", customer: "Gulf Coast Power", asset: "Gas Turbine Unit 3", eventBegin: "03/09/2026 22:30", eventDescriptor: "Emergency shutdown - fuel pressure drop", eventRestore: "03/10/2026 04:15", duration: "5h 45m", severity: "Critical", eventDetails: "Alarm: Low fuel pressure alarm triggered automatic shutdown. Assessment: Gas supply line blockage identified. Repair: Line cleared and pressure restored. Restart: Unit brought back online per startup procedures.", actionsTaken: "Initiated emergency response protocol. Notified ERCOT of forced outage. Coordinated with gas supplier. Filed incident report with management." },
-  { id: 5, shiftOperator: "Kim, S.", customer: "Texas Energy Co.", asset: "Solar Array Delta", eventBegin: "03/10/2026 14:00", eventDescriptor: "Inverter communication loss - String 4", eventRestore: "03/10/2026 15:30", duration: "1h 30m", severity: "Medium", eventDetails: "Detection: SCADA lost communication with inverter INV-D4. Troubleshooting: Remote reboot attempted unsuccessfully. Resolution: On-site technician reset communication module.", actionsTaken: "Attempted remote diagnostic via SCADA. Dispatched field technician. Replaced faulty ethernet cable at inverter." },
-  { id: 6, shiftOperator: "Martinez, R.", customer: "White Realty Management", asset: "Building Complex A", eventBegin: "03/10/2026 16:30", eventDescriptor: "HVAC system optimization event", eventRestore: "03/10/2026 18:00", duration: "1h 30m", severity: "Low", eventDetails: "Scheduled: Routine HVAC optimization during off-peak. Execution: Temperature setpoints adjusted per protocol. Complete: Normal operations resumed.", actionsTaken: "Coordinated with building management. Adjusted setpoints across 15 units. Monitored occupant comfort levels. Documented energy savings." },
-]
 
 // ============ HELPERS ============
 function parseReportDate(dateStr: string): Date {
@@ -48,29 +38,26 @@ function parseReportDate(dateStr: string): Date {
   return new Date(year, month - 1, day)
 }
 
-function parseLogDate(dateStr: string): Date {
-  const [datePart] = dateStr.split(" ")
-  const [month, day, year] = datePart.split("/").map(Number)
-  return new Date(year, month - 1, day)
+// ── Pill badge components ──
+function TypePill({ type }: { type: string }) {
+  const styles: Record<string, { bg: string; color: string }> = {
+    NCLR: { bg: "rgba(26,92,168,0.10)", color: "#1a5ca8" },
+    ESR:  { bg: "rgba(217,119,6,0.10)",  color: "#b45309" },
+    GEN:  { bg: "rgba(45,122,45,0.10)",  color: "#2d7a2d" },
+  }
+  const s = styles[type] ?? { bg: "rgba(100,100,100,0.1)", color: "#555" }
+  return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold tracking-wide"
+      style={{ background: s.bg, color: s.color }}>
+      {type}
+    </span>
+  )
 }
 
-function resourceTypeSeverity(rt: string): "info" | "warning" | "success" {
-  if (rt === "NCLR") return "info"
-  if (rt === "ESR") return "warning"
-  return "success"
-}
-
-function severityTag(severity: string): "danger" | "warning" | "success" | "info" {
-  if (severity === "Critical") return "danger"
-  if (severity === "High") return "warning"
-  if (severity === "Low") return "success"
-  return "info"
-}
 
 // ============ MAIN PAGE ============
 export default function RealTimeOperationsPage() {
-  // Tab
-  const [activeTabIndex, setActiveTabIndex] = useState(0)
+  const [activeTab, setActiveTab] = useState(0)
 
   // Reports state
   const [expandedReportRows, setExpandedReportRows] = useState<DataTableExpandedRows>({})
@@ -85,24 +72,13 @@ export default function RealTimeOperationsPage() {
   const [reportFilterAsset, setReportFilterAsset] = useState<string | null>(null)
   const [reportFilterResourceType, setReportFilterResourceType] = useState<string | null>(null)
 
-  // Daily Log state
-  const [expandedLogRows, setExpandedLogRows] = useState<DataTableExpandedRows>({})
-  const [logFilterQuery, setLogFilterQuery] = useState("")
-  const [logStartDate, setLogStartDate] = useState("2026-03-01")
-  const [logEndDate, setLogEndDate] = useState("2026-03-31")
-  const [logFilterCustomer, setLogFilterCustomer] = useState<string | null>(null)
-  const [logFilterAsset, setLogFilterAsset] = useState<string | null>(null)
-  const [logFilterResourceType, setLogFilterResourceType] = useState<string | null>(null)
+  const dailyLogRef = useRef<DailyLogHandle>(null)
 
   const autoResourceType = selectedAsset ? assetResourceTypeMap[selectedAsset] || "" : ""
 
   const uniqueReportCustomers = [...new Set(mockReports.map((r) => r.customer))].map(v => ({ label: v, value: v }))
   const uniqueReportAssets = [...new Set(mockReports.map((r) => r.asset))].map(v => ({ label: v, value: v }))
   const uniqueReportResourceTypes = [...new Set(mockReports.map((r) => r.resourceType))].map(v => ({ label: v, value: v }))
-  const uniqueLogCustomers = [...new Set(mockDailyLogs.map((l) => l.customer))].map(v => ({ label: v, value: v }))
-  const uniqueLogAssets = [...new Set(mockDailyLogs.map((l) => l.asset))].map(v => ({ label: v, value: v }))
-  const uniqueLogResourceTypes = [...new Set(Object.values(assetResourceTypeMap))].map(v => ({ label: v, value: v }))
-
   const filteredReports = useMemo(() => {
     return mockReports.filter((report) => {
       const reportDate = parseReportDate(report.uploadedDate)
@@ -120,26 +96,6 @@ export default function RealTimeOperationsPage() {
     })
   }, [reportStartDate, reportEndDate, reportFilterCustomer, reportFilterAsset, reportFilterResourceType, reportFilterQuery])
 
-  const filteredLogs = useMemo(() => {
-    return mockDailyLogs.filter((log) => {
-      const logDate = parseLogDate(log.eventBegin)
-      const start = new Date(logStartDate)
-      const end = new Date(logEndDate)
-      if (logDate < start || logDate > end) return false
-      if (logFilterCustomer && log.customer !== logFilterCustomer) return false
-      if (logFilterAsset && log.asset !== logFilterAsset) return false
-      if (logFilterResourceType && (assetResourceTypeMap[log.asset] || "") !== logFilterResourceType) return false
-      if (logFilterQuery) {
-        const q = logFilterQuery.toLowerCase()
-        if (![log.shiftOperator, log.customer, log.asset, log.eventDescriptor].some(s => s.toLowerCase().includes(q))) return false
-      }
-      return true
-    })
-  }, [logStartDate, logEndDate, logFilterCustomer, logFilterAsset, logFilterResourceType, logFilterQuery])
-
-  const criticalCount = filteredLogs.filter(l => l.severity === "Critical").length
-  const highCount = filteredLogs.filter(l => l.severity === "High").length
-
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault(); e.stopPropagation()
     setDragActive(e.type === "dragenter" || e.type === "dragover")
@@ -150,248 +106,399 @@ export default function RealTimeOperationsPage() {
   }
 
   // ── Column body templates ──
-  const reportResourceTypeBody = (row: typeof mockReports[0]) => (
-    <Tag value={row.resourceType} severity={resourceTypeSeverity(row.resourceType)} />
-  )
+  const reportResourceTypeBody = (row: typeof mockReports[0]) => <TypePill type={row.resourceType} />
 
   const reportValidationBody = (row: typeof mockReports[0]) => (
     <div className="flex gap-2">
       <span title="Validation 1">
         {row.validation1
-          ? <Check className="h-4 w-4" style={{ color: "#2d7a2d" }} />
-          : <span style={{ color: "var(--text-color-secondary)" }}>—</span>}
+          ? <Check className="h-3.5 w-3.5" style={{ color: "#2d7a2d" }} />
+          : <span style={{ color: "var(--text-color-secondary)", fontSize: 13 }}>—</span>}
       </span>
       <span title="Validation 2">
         {row.validation2
-          ? <Check className="h-4 w-4" style={{ color: "#2d7a2d" }} />
-          : <span style={{ color: "var(--text-color-secondary)" }}>—</span>}
+          ? <Check className="h-3.5 w-3.5" style={{ color: "#2d7a2d" }} />
+          : <span style={{ color: "var(--text-color-secondary)", fontSize: 13 }}>—</span>}
       </span>
     </div>
   )
 
   const reportActionsBody = () => (
-    <div className="flex gap-1">
-      <Button icon="pi pi-eye" rounded text size="small" tooltip="Preview" />
-      <Button icon="pi pi-download" rounded text size="small" tooltip="Download" />
+    <div className="flex gap-0.5">
+      <Button icon="pi pi-eye" rounded text size="small" tooltip="Preview" style={{ width: "1.75rem", height: "1.75rem" }} />
+      <Button icon="pi pi-download" rounded text size="small" tooltip="Download" style={{ width: "1.75rem", height: "1.75rem" }} />
     </div>
   )
 
   const reportExpansionTemplate = (row: typeof mockReports[0]) => (
-    <div className="p-4" style={{ background: "var(--surface-section)" }}>
-      <div className="rounded-lg overflow-hidden border" style={{ borderColor: "var(--surface-border)", background: "var(--surface-card)" }}>
-        <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: "var(--surface-border)", background: "var(--surface-hover)" }}>
+    <div className="px-6 py-4" style={{ background: "var(--surface-ground)" }}>
+      <div className="rounded-xl overflow-hidden border" style={{ borderColor: "var(--surface-border)", background: "var(--surface-card)" }}>
+        <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: "var(--surface-border)" }}>
           <div className="flex items-center gap-2">
-            <FileText className="h-4 w-4" style={{ color: "#cc1111" }} />
-            <span className="text-sm font-medium" style={{ color: "var(--text-color)" }}>{row.report}.pdf</span>
+            <FileText className="h-3.5 w-3.5" style={{ color: "#cc1111" }} />
+            <span className="text-xs font-medium" style={{ color: "var(--text-color)" }}>{row.report}.pdf</span>
           </div>
         </div>
-        <div className="p-5 space-y-5">
-          <div className="border-b pb-4" style={{ borderColor: "var(--surface-border)" }}>
-            <div className="flex justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-wider mb-0.5" style={{ color: "var(--text-color-secondary)" }}>Ammper Power</p>
-                <p className="text-sm font-bold" style={{ color: "#2d7a2d" }}>Power Sphere</p>
-              </div>
-              <div className="text-right">
-                <p className="text-xs" style={{ color: "var(--text-color-secondary)" }}>Report Date</p>
-                <p className="text-sm font-medium" style={{ color: "var(--text-color)" }}>{row.uploadedDate}</p>
-              </div>
+        <div className="p-5 space-y-4">
+          <div className="flex justify-between border-b pb-4" style={{ borderColor: "var(--surface-border)" }}>
+            <div>
+              <p className="text-[10px] uppercase tracking-widest mb-0.5" style={{ color: "var(--text-color-secondary)" }}>Ammper Power</p>
+              <p className="text-xs font-bold" style={{ color: "#2d7a2d" }}>Power Sphere</p>
+              <h1 className="text-sm font-semibold mt-2" style={{ color: "var(--text-color)" }}>{row.report}</h1>
             </div>
-            <h1 className="text-base font-bold mt-3" style={{ color: "var(--text-color)" }}>{row.report}</h1>
-            <div className="flex gap-2 mt-2">
-              <Tag value={`Customer: ${row.customer}`} severity="secondary" />
-              <Tag value={`Asset: ${row.asset}`} severity="secondary" />
-              <Tag value={`Type: ${row.resourceType}`} severity={resourceTypeSeverity(row.resourceType)} />
+            <div className="text-right">
+              <p className="text-[10px] uppercase tracking-wider mb-0.5" style={{ color: "var(--text-color-secondary)" }}>Report Date</p>
+              <p className="text-xs font-medium" style={{ color: "var(--text-color)" }}>{row.uploadedDate}</p>
             </div>
           </div>
-
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-color-secondary)" }}>Summary</p>
-            <p className="text-sm" style={{ color: "var(--text-color-secondary)" }}>
-              This report provides a comprehensive analysis of operational performance for {row.asset} during the reporting period. Key metrics indicate stable generation output with minor variance from forecasted levels.
-            </p>
+          <div className="flex gap-1.5 flex-wrap">
+            <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: "var(--surface-section)", color: "var(--text-color-secondary)" }}>
+              {row.customer}
+            </span>
+            <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: "var(--surface-section)", color: "var(--text-color-secondary)" }}>
+              {row.asset}
+            </span>
+            <TypePill type={row.resourceType} />
           </div>
-
+          <p className="text-xs leading-relaxed" style={{ color: "var(--text-color-secondary)" }}>
+            This report provides a comprehensive analysis of operational performance for {row.asset} during the reporting period. Key metrics indicate stable generation output with minor variance from forecasted levels.
+          </p>
           <div className="grid grid-cols-3 gap-3">
-            {[["ERCOT Protocols", "Compliant"], ["NERC Standards", "Compliant"], ["Internal SLA", "Met"]].map(([label, val]) => (
-              <div key={label} className="p-3 rounded-lg border" style={{ borderColor: "var(--surface-border)", background: "var(--surface-section)" }}>
-                <p className="text-xs uppercase tracking-wide mb-1" style={{ color: "var(--text-color-secondary)" }}>{label}</p>
-                <p className="text-sm font-semibold" style={{ color: "#2d7a2d" }}>{val}</p>
+            {[["ERCOT Protocols", "Compliant", "#2d7a2d"], ["NERC Standards", "Compliant", "#2d7a2d"], ["Internal SLA", "Met", "#1a5ca8"]].map(([label, val, color]) => (
+              <div key={label} className="p-3 rounded-xl" style={{ background: "var(--surface-section)" }}>
+                <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "var(--text-color-secondary)" }}>{label}</p>
+                <p className="text-xs font-semibold" style={{ color }}>{val}</p>
               </div>
             ))}
           </div>
-
           <div className="grid grid-cols-2 gap-3">
-            <div className="p-3 rounded-lg border" style={{ borderColor: "var(--surface-border)", background: "var(--surface-section)" }}>
-              <p className="text-xs uppercase tracking-wide mb-2" style={{ color: "var(--text-color-secondary)" }}>Generation Output (MW)</p>
-              <div className="h-14 flex items-end gap-0.5">
-                {[65, 78, 82, 71, 88, 92, 85, 79, 83, 90, 87, 81].map((val, i) => (
-                  <div key={i} className="flex-1 rounded-t-sm" style={{ height: `${val}%`, background: "#cc1111" }} />
-                ))}
+            {[
+              { label: "Generation Output (MW)", bars: [65, 78, 82, 71, 88, 92, 85, 79, 83, 90, 87, 81], color: "#cc1111" },
+              { label: "Response Time (sec)", bars: [45, 52, 38, 41, 55, 48, 42, 50, 44, 39, 47, 43], color: "#1a5ca8" },
+            ].map(({ label, bars, color }) => (
+              <div key={label} className="p-3 rounded-xl" style={{ background: "var(--surface-section)" }}>
+                <p className="text-[10px] uppercase tracking-wider mb-2" style={{ color: "var(--text-color-secondary)" }}>{label}</p>
+                <div className="h-12 flex items-end gap-0.5">
+                  {bars.map((v, i) => (
+                    <div key={i} className="flex-1 rounded-t-sm" style={{ height: `${v}%`, background: color, opacity: 0.8 }} />
+                  ))}
+                </div>
               </div>
-            </div>
-            <div className="p-3 rounded-lg border" style={{ borderColor: "var(--surface-border)", background: "var(--surface-section)" }}>
-              <p className="text-xs uppercase tracking-wide mb-2" style={{ color: "var(--text-color-secondary)" }}>Response Time (sec)</p>
-              <div className="h-14 flex items-end gap-0.5">
-                {[45, 52, 38, 41, 55, 48, 42, 50, 44, 39, 47, 43].map((val, i) => (
-                  <div key={i} className="flex-1 rounded-t-sm" style={{ height: `${val}%`, background: "#1a5ca8" }} />
-                ))}
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       </div>
     </div>
   )
 
-  const logSeverityBody = (row: typeof mockDailyLogs[0]) => (
-    <Tag value={row.severity} severity={severityTag(row.severity)} />
-  )
+  // ── Shared control height — matches across all filter bar elements ──
+  const CTRL_H = "30px"
+  const BORDER = "1px solid var(--surface-border)"
 
-  const logDurationBody = (row: typeof mockDailyLogs[0]) => (
-    <span className="font-mono text-xs" style={{ color: "var(--text-color-secondary)" }}>{row.duration}</span>
-  )
+  // ── Shared dropdown passthrough for compact styling ──
+  const ddPt = {
+    root: { style: { fontSize: 12, height: CTRL_H, border: BORDER } },
+    input: { style: { fontSize: 12, padding: "0 0.5rem", height: "100%", display: "flex", alignItems: "center", minHeight: "unset" } },
+    trigger: { style: { width: "1.75rem" } },
+    item: { style: { fontSize: 12, padding: "0.375rem 0.75rem" } },
+    header: { style: { padding: "0.375rem 0.5rem" } },
+    filterInput: { style: { fontSize: 12 } },
+  }
 
-  const logCustomerBody = (row: typeof mockDailyLogs[0]) => (
-    <div>
-      <div className="text-sm font-medium" style={{ color: "var(--text-color)" }}>{row.customer}</div>
-      <div className="text-xs" style={{ color: "var(--text-color-secondary)" }}>{row.asset}</div>
-    </div>
-  )
-
-  const logExpansionTemplate = (row: typeof mockDailyLogs[0]) => (
-    <div className="p-4 grid grid-cols-2 gap-4" style={{ background: "var(--surface-section)" }}>
-      <div className="p-3 rounded-lg border" style={{ borderColor: "var(--surface-border)", background: "var(--surface-card)" }}>
-        <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#cc1111" }}>Event Details</p>
-        <p className="text-sm" style={{ color: "var(--text-color-secondary)" }}>{row.eventDetails}</p>
-      </div>
-      <div className="p-3 rounded-lg border" style={{ borderColor: "var(--surface-border)", background: "var(--surface-card)" }}>
-        <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#2d7a2d" }}>Actions Taken</p>
-        <p className="text-sm" style={{ color: "var(--text-color-secondary)" }}>{row.actionsTaken}</p>
-      </div>
-    </div>
-  )
-
-  // ── Toolbar helpers ──
+  // ── Filter bar ──
   const filterBar = (
     type: "report" | "log",
     startDate: string, setStart: (v: string) => void,
     endDate: string, setEnd: (v: string) => void,
-    customers: {label:string,value:string}[],
+    customers: { label: string; value: string }[],
     customer: string | null, setCustomer: (v: string | null) => void,
-    assets: {label:string,value:string}[],
+    assets: { label: string; value: string }[],
     asset: string | null, setAsset: (v: string | null) => void,
-    resourceTypes: {label:string,value:string}[],
+    resourceTypes: { label: string; value: string }[],
     resourceType: string | null, setResourceType: (v: string | null) => void,
     query: string, setQuery: (v: string) => void,
   ) => (
-    <div className="flex flex-wrap items-center gap-2 mb-4">
-      <span className="p-input-icon-left flex-1 min-w-[180px]">
-        <i className="pi pi-search" />
+    <div className="flex flex-wrap items-center gap-2 mb-5">
+      {/* Search — height locked to CTRL_H */}
+      <div className="relative" style={{ flex: 1, minWidth: 160, height: CTRL_H }}>
+        <i className="pi pi-search" style={{
+          position: "absolute", left: "0.6rem", top: "50%",
+          transform: "translateY(-50%)", fontSize: 11,
+          color: "var(--text-color-secondary)", pointerEvents: "none", zIndex: 1,
+        }} />
         <InputText
           value={query}
           onChange={e => setQuery(e.target.value)}
           placeholder="Search..."
-          className="w-full"
-          size="small"
+          style={{ width: "100%", height: CTRL_H, paddingLeft: "1.85rem", paddingRight: "0.5rem", fontSize: 12, boxSizing: "border-box" }}
         />
-      </span>
-      <input type="date" value={startDate} onChange={e => setStart(e.target.value)}
-        className="px-2 py-1.5 rounded border text-sm"
-        style={{ background: "var(--surface-card)", borderColor: "var(--surface-border)", color: "var(--text-color)" }}
-      />
-      <span style={{ color: "var(--text-color-secondary)", fontSize: 12 }}>to</span>
-      <input type="date" value={endDate} onChange={e => setEnd(e.target.value)}
-        className="px-2 py-1.5 rounded border text-sm"
-        style={{ background: "var(--surface-card)", borderColor: "var(--surface-border)", color: "var(--text-color)" }}
-      />
-      <Dropdown value={customer} options={customers} onChange={e => setCustomer(e.value)} placeholder="Customer" showClear className="text-sm" style={{ minWidth: 140 }} />
-      <Dropdown value={asset} options={assets} onChange={e => setAsset(e.value)} placeholder="Asset" showClear className="text-sm" style={{ minWidth: 130 }} />
-      <Dropdown value={resourceType} options={resourceTypes} onChange={e => setResourceType(e.value)} placeholder="Type" showClear className="text-sm" style={{ minWidth: 110 }} />
+      </div>
+
+      {/* Date range — height locked to CTRL_H */}
+      <div className="flex items-center gap-1.5 px-2 rounded-lg"
+        style={{ height: CTRL_H, background: "var(--surface-card)", border: BORDER, boxSizing: "border-box" }}>
+        <i className="pi pi-calendar" style={{ fontSize: 11, color: "var(--text-color-secondary)", flexShrink: 0 }} />
+        <input type="date" value={startDate} onChange={e => setStart(e.target.value)}
+          style={{ background: "transparent", border: "none", outline: "none", fontSize: 12, color: "var(--text-color)", cursor: "pointer" }}
+        />
+        <span style={{ color: "var(--text-color-secondary)", fontSize: 11, padding: "0 2px" }}>—</span>
+        <input type="date" value={endDate} onChange={e => setEnd(e.target.value)}
+          style={{ background: "transparent", border: "none", outline: "none", fontSize: 12, color: "var(--text-color)", cursor: "pointer" }}
+        />
+      </div>
+
+      {/* Compact dropdowns — height locked to CTRL_H via pt.root */}
+      <Dropdown value={customer} options={customers} onChange={e => setCustomer(e.value)}
+        placeholder="Customer" showClear style={{ minWidth: 120 }} pt={ddPt} />
+      <Dropdown value={asset} options={assets} onChange={e => setAsset(e.value)}
+        placeholder="Asset" showClear style={{ minWidth: 110 }} pt={ddPt} />
+      <Dropdown value={resourceType} options={resourceTypes} onChange={e => setResourceType(e.value)}
+        placeholder="Type" showClear style={{ minWidth: 90 }} pt={ddPt} />
+
+      {/* Upload */}
       {type === "report" && (
-        <Button label="Upload Report" icon="pi pi-upload" size="small" onClick={() => setUploadModalOpen(true)} />
+        <button
+          onClick={() => setUploadModalOpen(true)}
+          className="flex items-center gap-1.5 rounded-lg font-semibold transition-opacity hover:opacity-90"
+          style={{ background: "#cc1111", color: "#fff", border: "none", cursor: "pointer", fontSize: 12, padding: "0.375rem 0.875rem" }}
+        >
+          <i className="pi pi-upload" style={{ fontSize: 11 }} />
+          Upload
+        </button>
       )}
     </div>
   )
 
+  // ── Shared table header style injected via className trick ──
+  const tableHeaderStyle = {
+    fontSize: "11px",
+    fontWeight: 600,
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.06em",
+    color: "var(--text-color-secondary)",
+    background: "var(--surface-card)",
+    borderBottom: "1px solid var(--surface-border)",
+    padding: "0.625rem 0.75rem",
+  }
+
+  const tableCellStyle = {
+    fontSize: "13px",
+    color: "var(--text-color)",
+    padding: "0.625rem 0.75rem",
+    borderBottom: "1px solid var(--surface-border)",
+    borderTop: "none",
+    borderLeft: "none",
+    borderRight: "none",
+  }
+
   return (
     <DashboardLayout pageTitle="Real Time Operations">
       {/* Upload Modal */}
-      <Dialog
-        header="Upload Report"
-        visible={uploadModalOpen}
-        onHide={() => setUploadModalOpen(false)}
-        style={{ width: "440px" }}
-        modal
-      >
-        <div className="space-y-4 pt-2">
-          <div
-            className="border-2 border-dashed rounded-xl p-8 text-center transition-all"
-            style={{
-              borderColor: dragActive ? "#cc1111" : "var(--surface-border)",
-              background: dragActive ? "rgba(204,17,17,0.05)" : "var(--surface-section)",
+      {(() => {
+        const mLabel: React.CSSProperties = {
+          display: "block", fontSize: 10, fontWeight: 600,
+          textTransform: "uppercase", letterSpacing: "0.06em",
+          color: "var(--text-color-secondary)", marginBottom: 4,
+        }
+        const mInput: React.CSSProperties = {
+          width: "100%", padding: "0.375rem 0.5rem", fontSize: 12,
+          border: "1px solid var(--surface-border)", borderRadius: 6,
+          background: "var(--surface-card)", color: "var(--text-color)",
+          outline: "none", boxSizing: "border-box", fontFamily: "inherit",
+        }
+        const mBtnSecondary: React.CSSProperties = {
+          background: "none", border: "1px solid var(--surface-border)", borderRadius: 6,
+          fontSize: 12, fontWeight: 500, padding: "0.35rem 0.75rem",
+          color: "var(--text-color-secondary)", cursor: "pointer",
+        }
+        const mBtnPrimary: React.CSSProperties = {
+          background: "#cc1111", border: "none", borderRadius: 6,
+          fontSize: 12, fontWeight: 600, padding: "0.35rem 0.875rem",
+          color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+        }
+        return (
+          <Dialog
+            header={
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 26, height: 26, borderRadius: 6, background: "rgba(204,17,17,0.10)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <i className="pi pi-upload" style={{ fontSize: 11, color: "#cc1111" }} />
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-color)" }}>Upload Report</span>
+              </div>
+            }
+            visible={uploadModalOpen}
+            onHide={() => setUploadModalOpen(false)}
+            style={{ width: 400 }}
+            modal
+            pt={{
+              header:  { style: { borderBottom: "1px solid var(--surface-border)", padding: "0.75rem 1rem" } },
+              content: { style: { padding: "1rem" } },
             }}
-            onDragEnter={handleDrag} onDragLeave={handleDrag}
-            onDragOver={handleDrag} onDrop={handleDrop}
           >
-            <div className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3"
-              style={{ background: "rgba(204,17,17,0.1)" }}>
-              <Upload className="h-6 w-6" style={{ color: "#cc1111" }} />
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.875rem" }}>
+              {/* Drop zone */}
+              <div
+                style={{
+                  border: `2px dashed ${dragActive ? "#cc1111" : "var(--surface-border)"}`,
+                  borderRadius: 10,
+                  background: dragActive ? "rgba(204,17,17,0.04)" : "var(--surface-section)",
+                  padding: "1.5rem 1rem",
+                  textAlign: "center",
+                  transition: "border-color 0.15s, background 0.15s",
+                }}
+                onDragEnter={handleDrag} onDragLeave={handleDrag}
+                onDragOver={handleDrag} onDrop={handleDrop}
+              >
+                <div style={{ width: 36, height: 36, borderRadius: 8, background: "rgba(204,17,17,0.10)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 0.625rem" }}>
+                  <i className="pi pi-upload" style={{ fontSize: 14, color: "#cc1111" }} />
+                </div>
+                <p style={{ fontSize: 13, fontWeight: 500, color: "var(--text-color)", margin: 0 }}>Drop a PDF file here</p>
+                <p style={{ fontSize: 11, color: "var(--text-color-secondary)", margin: "0.25rem 0 0.75rem" }}>or</p>
+                <button style={{ ...mBtnSecondary, fontSize: 11, margin: "0 auto" }}>Browse Files</button>
+              </div>
+
+              {/* Customer */}
+              <div>
+                <label style={mLabel}>Customer</label>
+                <select
+                  value={selectedCustomer}
+                  onChange={e => setSelectedCustomer(e.target.value)}
+                  style={mInput}
+                >
+                  <option value="">Select customer</option>
+                  {uniqueReportCustomers.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+
+              {/* Asset */}
+              <div>
+                <label style={mLabel}>Asset</label>
+                <select
+                  value={selectedAsset}
+                  onChange={e => setSelectedAsset(e.target.value)}
+                  style={mInput}
+                >
+                  <option value="">Select asset</option>
+                  {uniqueReportAssets.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+
+              {/* Resource Type — system-filled, read-only */}
+              <div>
+                <label style={mLabel}>Resource Type</label>
+                <div style={{
+                  ...mInput,
+                  display: "flex", alignItems: "center", gap: 8,
+                  background: "var(--surface-section)",
+                  color: autoResourceType ? "var(--text-color)" : "var(--text-color-secondary)",
+                  cursor: "default", userSelect: "none",
+                }}>
+                  {autoResourceType
+                    ? <TypePill type={autoResourceType} />
+                    : <span style={{ fontSize: 12, fontStyle: "italic" }}>Auto-detected from asset</span>
+                  }
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", paddingTop: "0.25rem", borderTop: "1px solid var(--surface-border)" }}>
+                <button style={mBtnSecondary} onClick={() => setUploadModalOpen(false)}>Cancel</button>
+                <button style={mBtnPrimary}>
+                  <i className="pi pi-upload" style={{ fontSize: 11 }} />
+                  Upload
+                </button>
+              </div>
             </div>
-            <p className="text-sm font-medium mb-1" style={{ color: "var(--text-color)" }}>Drag and drop PDF file here</p>
-            <p className="text-xs mb-3" style={{ color: "var(--text-color-secondary)" }}>or</p>
-            <Button label="Browse Files" outlined size="small" />
-          </div>
+          </Dialog>
+        )
+      })()}
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium" style={{ color: "var(--text-color)" }}>Customer</label>
-            <Dropdown
-              value={selectedCustomer} options={uniqueReportCustomers}
-              onChange={e => setSelectedCustomer(e.value)}
-              placeholder="Select customer" className="w-full"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-sm font-medium" style={{ color: "var(--text-color)" }}>Asset</label>
-            <Dropdown
-              value={selectedAsset} options={uniqueReportAssets}
-              onChange={e => setSelectedAsset(e.value)}
-              placeholder="Select asset" className="w-full"
-            />
-          </div>
-
-          {autoResourceType && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: "var(--surface-section)" }}>
-              <span className="text-sm" style={{ color: "var(--text-color-secondary)" }}>Resource Type:</span>
-              <Tag value={autoResourceType} severity={resourceTypeSeverity(autoResourceType)} />
-            </div>
-          )}
-
-          <div className="flex justify-end gap-2 pt-2">
-            <Button label="Cancel" outlined onClick={() => setUploadModalOpen(false)} />
-            <Button label="Upload" icon="pi pi-upload" />
-          </div>
+      {/* ── Underline Tab Bar ── */}
+      <div className="flex items-end justify-between mb-6"
+        style={{ borderBottom: "1px solid var(--surface-border)" }}>
+        <div className="flex items-end gap-0">
+          {[
+            { label: "Reports Repository", icon: "pi pi-file" },
+            { label: "Daily Log", icon: "pi pi-list" },
+          ].map((tab, i) => {
+            const active = activeTab === i
+            return (
+              <button
+                key={tab.label}
+                onClick={() => setActiveTab(i)}
+                style={{
+                  display: "flex", alignItems: "center", gap: "0.4rem",
+                  padding: "0.65rem 1.1rem",
+                  background: "transparent", border: "none", cursor: "pointer",
+                  fontSize: 13,
+                  fontWeight: active ? 600 : 400,
+                  color: active ? "#cc1111" : "var(--text-color-secondary)",
+                  borderBottom: active ? "2px solid #cc1111" : "2px solid transparent",
+                  marginBottom: -1,
+                  transition: "color 0.15s",
+                  outline: "none",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <i className={tab.icon} style={{ fontSize: 12 }} />
+                {tab.label}
+              </button>
+            )
+          })}
         </div>
-      </Dialog>
 
-      <TabView activeIndex={activeTabIndex} onTabChange={e => setActiveTabIndex(e.index)}>
-        {/* ── Reports Repository ── */}
-        <TabPanel header="Reports Repository">
-          {/* Stats row */}
-          <div className="flex items-center gap-4 mb-4">
-            <div className="flex items-center gap-2 px-4 py-2 rounded-lg border"
-              style={{ background: "var(--surface-card)", borderColor: "var(--surface-border)" }}>
-              <FileText className="h-4 w-4" style={{ color: "#cc1111" }} />
-              <span className="text-sm font-semibold" style={{ color: "var(--text-color)" }}>
-                {filteredReports.length} Available Reports
-              </span>
-            </div>
-            {(reportFilterCustomer || reportFilterAsset || reportFilterResourceType || reportFilterQuery) && (
-              <Tag value="Filtered" severity="warning" icon="pi pi-filter" />
-            )}
-          </div>
+        <div className="pb-2 flex items-center">
+          {activeTab === 1 && (
+            <button
+              onClick={() => dailyLogRef.current?.triggerShiftLogout()}
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                background: "none", border: "1px solid var(--surface-border)", borderRadius: 6,
+                fontSize: 12, fontWeight: 500, padding: "0.3rem 0.75rem",
+                color: "var(--text-color-secondary)", cursor: "pointer",
+              }}
+            >
+              <i className="pi pi-sign-out" style={{ fontSize: 11 }} />
+              Shift Log Out
+            </button>
+          )}
+        </div>
+      </div>
 
+      {/* ── Reports Repository ── */}
+      {activeTab === 0 && (
+        <div>
+          {/* KPI bar */}
+          {(() => {
+            const validated = filteredReports.filter(r => r.validation1 && r.validation2).length
+            const pending   = filteredReports.filter(r => !r.validation1 || !r.validation2).length
+            const KBORDER = "1px solid var(--surface-border)"
+            return (
+              <div style={{ display: "inline-flex", alignItems: "center", gap: "1rem", padding: "0.5rem 0.875rem", borderRadius: 10, background: "var(--surface-card)", border: KBORDER, marginBottom: "1.25rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ width: 26, height: 26, borderRadius: 6, background: "rgba(204,17,17,0.10)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <i className="pi pi-file" style={{ fontSize: 12, color: "#cc1111" }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-color-secondary)", lineHeight: 1 }}>Reports</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text-color)", lineHeight: 1.2 }}>{filteredReports.length}</div>
+                  </div>
+                </div>
+                <div style={{ width: 1, height: 24, background: "var(--surface-border)" }} />
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <i className="pi pi-check-circle" style={{ fontSize: 11, color: "#2d7a2d" }} />
+                  <span style={{ fontSize: 11, color: "var(--text-color-secondary)" }}>Validated</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: "#2d7a2d" }}>{validated}</span>
+                </div>
+                <div style={{ width: 1, height: 24, background: "var(--surface-border)" }} />
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <i className="pi pi-clock" style={{ fontSize: 11, color: "#b45309" }} />
+                  <span style={{ fontSize: 11, color: "var(--text-color-secondary)" }}>Pending</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: "#b45309" }}>{pending}</span>
+                </div>
+              </div>
+            )
+          })()}
           {filterBar(
             "report",
             reportStartDate, setReportStartDate,
@@ -401,87 +508,40 @@ export default function RealTimeOperationsPage() {
             uniqueReportResourceTypes, reportFilterResourceType, setReportFilterResourceType,
             reportFilterQuery, setReportFilterQuery,
           )}
-
-          <DataTable
-            value={filteredReports}
-            dataKey="id"
-            expandedRows={expandedReportRows}
-            onRowToggle={e => setExpandedReportRows(e.data as DataTableExpandedRows)}
-            rowExpansionTemplate={reportExpansionTemplate}
-            stripedRows
-            size="small"
-            emptyMessage="No reports match the current filters."
-            style={{ background: "var(--surface-card)" }}
-          >
-            <Column expander style={{ width: "3rem" }} />
-            <Column field="report" header="Report" sortable style={{ minWidth: "260px" }} />
-            <Column field="uploadedDate" header="Uploaded" sortable style={{ width: "120px" }} />
-            <Column header="Type" body={reportResourceTypeBody} style={{ width: "90px" }} />
-            <Column field="customer" header="Customer" sortable style={{ minWidth: "160px" }} />
-            <Column field="asset" header="Asset" sortable style={{ minWidth: "130px" }} />
-            <Column header="Validation" body={reportValidationBody} style={{ width: "100px" }} />
-            <Column header="Actions" body={reportActionsBody} style={{ width: "90px" }} />
-          </DataTable>
-        </TabPanel>
-
-        {/* ── Daily Log ── */}
-        <TabPanel header="Daily Log">
-          {/* Stats row */}
-          <div className="flex items-center gap-4 mb-4">
-            <div className="flex items-center gap-2 px-4 py-2 rounded-lg border"
-              style={{ background: "var(--surface-card)", borderColor: "var(--surface-border)" }}>
-              <FileText className="h-4 w-4" style={{ color: "#cc1111" }} />
-              <span className="text-sm font-semibold" style={{ color: "var(--text-color)" }}>
-                {filteredLogs.length} Daily Logs
-              </span>
-            </div>
-            {criticalCount > 0 && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg"
-                style={{ background: "rgba(204,17,17,0.1)", color: "#cc1111" }}>
-                <AlertTriangle className="h-3.5 w-3.5" />
-                <span className="text-xs font-semibold">{criticalCount} Critical</span>
-              </div>
-            )}
-            {highCount > 0 && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg"
-                style={{ background: "rgba(217,119,6,0.1)", color: "#d97706" }}>
-                <Clock className="h-3.5 w-3.5" />
-                <span className="text-xs font-semibold">{highCount} High</span>
-              </div>
-            )}
+          <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid var(--surface-border)" }}>
+            <DataTable
+              value={filteredReports}
+              dataKey="id"
+              expandedRows={expandedReportRows}
+              onRowToggle={e => setExpandedReportRows(e.data as DataTableExpandedRows)}
+              rowExpansionTemplate={reportExpansionTemplate}
+              size="small"
+              emptyMessage="No reports match the current filters."
+              style={{ background: "var(--surface-card)" }}
+              pt={{
+                thead: { style: { background: "var(--surface-card)" } },
+                tbody: { style: { background: "var(--surface-card)" } },
+                column: {
+                  headerCell: { style: tableHeaderStyle },
+                  bodyCell: { style: tableCellStyle },
+                },
+              }}
+            >
+              <Column expander style={{ width: "2.5rem" }} />
+              <Column field="report" header="Report" sortable style={{ minWidth: "260px" }} />
+              <Column field="uploadedDate" header="Uploaded" sortable style={{ width: "110px" }} />
+              <Column header="Type" body={reportResourceTypeBody} style={{ width: "80px" }} />
+              <Column field="customer" header="Customer" sortable style={{ minWidth: "155px" }} />
+              <Column field="asset" header="Asset" sortable style={{ minWidth: "130px" }} />
+              <Column header="Validation" body={reportValidationBody} style={{ width: "95px" }} />
+              <Column header="" body={reportActionsBody} style={{ width: "80px" }} />
+            </DataTable>
           </div>
+        </div>
+      )}
 
-          {filterBar(
-            "log",
-            logStartDate, setLogStartDate,
-            logEndDate, setLogEndDate,
-            uniqueLogCustomers, logFilterCustomer, setLogFilterCustomer,
-            uniqueLogAssets, logFilterAsset, setLogFilterAsset,
-            uniqueLogResourceTypes, logFilterResourceType, setLogFilterResourceType,
-            logFilterQuery, setLogFilterQuery,
-          )}
-
-          <DataTable
-            value={filteredLogs}
-            dataKey="id"
-            expandedRows={expandedLogRows}
-            onRowToggle={e => setExpandedLogRows(e.data as DataTableExpandedRows)}
-            rowExpansionTemplate={logExpansionTemplate}
-            stripedRows
-            size="small"
-            emptyMessage="No log entries match the current filters."
-          >
-            <Column expander style={{ width: "3rem" }} />
-            <Column field="shiftOperator" header="Operator" sortable style={{ width: "130px" }} />
-            <Column header="Customer / Asset" body={logCustomerBody} style={{ minWidth: "160px" }} />
-            <Column field="eventDescriptor" header="Event" sortable style={{ minWidth: "220px" }} />
-            <Column field="eventBegin" header="Begin" sortable style={{ width: "140px", fontFamily: "monospace", fontSize: "0.75rem" }} />
-            <Column field="eventRestore" header="Restore" sortable style={{ width: "140px", fontFamily: "monospace", fontSize: "0.75rem" }} />
-            <Column header="Duration" body={logDurationBody} style={{ width: "90px" }} />
-            <Column header="Severity" body={logSeverityBody} sortable sortField="severity" style={{ width: "100px" }} />
-          </DataTable>
-        </TabPanel>
-      </TabView>
+      {/* ── Daily Log ── */}
+      {activeTab === 1 && <DailyLog ref={dailyLogRef} />}
     </DashboardLayout>
   )
 }
