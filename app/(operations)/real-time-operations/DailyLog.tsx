@@ -6,7 +6,6 @@ export type DailyLogHandle = { triggerShiftLogout: () => void }
 import { DataTable } from "primereact/datatable"
 import { Column } from "primereact/column"
 import { Dialog } from "primereact/dialog"
-import { Button } from "primereact/button"
 import { InputText } from "primereact/inputtext"
 import { Dropdown } from "primereact/dropdown"
 
@@ -370,18 +369,23 @@ export const DailyLog = forwardRef<DailyLogHandle>(function DailyLog(_, ref) {
         visible={!!currentLog}
         onHide={() => { setCurrentLog(null); setModalNote("") }}
         header={currentLog ? (
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-color)" }}>{currentLog.event}</div>
-            <div style={{ fontSize: 11, color: "var(--text-color-secondary)", marginTop: 2 }}>
-              {currentLog.customer} · {currentLog.asset}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 28, height: 28, borderRadius: 6, background: "rgba(204,17,17,0.10)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <i className="pi pi-book" style={{ fontSize: 12, color: "#cc1111" }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-color)" }}>{currentLog.event}</div>
+              <div style={{ fontSize: 11, color: "var(--text-color-secondary)", marginTop: 1 }}>
+                {currentLog.customer} · {currentLog.asset}
+              </div>
             </div>
           </div>
         ) : null}
-        style={{ width: 700 }}
+        style={{ width: 680 }}
         modal
         pt={{
-          header:  { style: { borderBottom: BORDER, paddingBottom: "0.875rem" } },
-          content: { style: { padding: "1rem 1.25rem" } },
+          header:  { style: { borderBottom: BORDER, padding: "0.75rem 1rem" } },
+          content: { style: { padding: "1rem" } },
         }}
       >
         {currentLog && (
@@ -407,15 +411,31 @@ export const DailyLog = forwardRef<DailyLogHandle>(function DailyLog(_, ref) {
               </table>
             </div>
             <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem", paddingTop: "1rem", borderTop: BORDER }}>
-              <InputText
+              <input
                 value={modalNote}
                 onChange={e => setModalNote(e.target.value)}
                 placeholder="Add a note to this event…"
                 onKeyDown={e => e.key === "Enter" && addModalNote()}
-                size="small"
-                style={{ flex: 1, fontSize: 13 }}
+                style={{
+                  flex: 1, padding: "0.375rem 0.625rem", fontSize: 12,
+                  border: BORDER, borderRadius: 6, background: "var(--surface-card)",
+                  color: "var(--text-color)", outline: "none", fontFamily: "inherit",
+                }}
               />
-              <Button label="Add" size="small" onClick={addModalNote} disabled={!modalNote.trim()} />
+              <button
+                onClick={addModalNote}
+                disabled={!modalNote.trim()}
+                style={{
+                  background: "#cc1111", border: "none", borderRadius: 6, fontSize: 12,
+                  fontWeight: 600, padding: "0.35rem 0.875rem", color: "#fff",
+                  cursor: modalNote.trim() ? "pointer" : "not-allowed",
+                  opacity: modalNote.trim() ? 1 : 0.4,
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                }}
+              >
+                <i className="pi pi-plus" style={{ fontSize: 11 }} />
+                Add
+              </button>
             </div>
           </>
         )}

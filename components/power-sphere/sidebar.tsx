@@ -3,41 +3,46 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { ChevronDown } from "lucide-react"
 import Image from "next/image"
 
 type NavChild = {
   name: string
   href: string
+  icon: string
 }
 
 type NavItem = {
   name: string
+  icon: string
   href?: string
   children?: NavChild[]
 }
 
 const navItems: NavItem[] = [
-  { name: "Retail Customer", href: "/retail-customer" },
-  { name: "Meter Readings", href: "/meter-readings" },
+  { name: "Retail Customer",  icon: "pi pi-users",     href: "/retail-customer" },
+  { name: "Meter Readings",   icon: "pi pi-chart-bar", href: "/meter-readings" },
   {
     name: "Operations",
+    icon: "pi pi-cog",
     children: [
-      { name: "Client Configuration", href: "/client-configuration" },
-      { name: "Document Repository", href: "/document-repository" },
-      { name: "Real Time Operations", href: "/real-time-operations" },
-      { name: "Prospect", href: "/prospect" },
+      { name: "Client Configuration",  icon: "pi pi-sliders-h", href: "/client-configuration" },
+      { name: "Document Repository",   icon: "pi pi-folder",    href: "/document-repository" },
+      { name: "Real Time Operations",  icon: "pi pi-desktop",   href: "/real-time-operations" },
+      { name: "Prospect",              icon: "pi pi-briefcase", href: "/prospect" },
     ],
   },
   {
     name: "Market Desk",
+    icon: "pi pi-chart-line",
     children: [
-      { name: "Market Transactions", href: "/market-transactions/scheduling" },
+      { name: "Market Transactions", icon: "pi pi-arrow-right-arrow-left", href: "/market-transactions/scheduling" },
     ],
   },
-  { name: "ETRM", href: "/etrm" },
-  { name: "Demand Response", href: "/demand-response" },
+  { name: "ETRM",            icon: "pi pi-database", href: "/etrm" },
+  { name: "Demand Response", icon: "pi pi-bolt",     href: "/demand-response" },
 ]
+
+const BORDER = "1px solid var(--surface-border)"
 
 export function Sidebar() {
   const pathname = usePathname()
@@ -56,29 +61,33 @@ export function Sidebar() {
   }, [pathname])
 
   return (
-    <aside
-      className="w-56 flex flex-col h-full shrink-0"
-      style={{ background: "var(--surface-card)", borderRight: "1px solid var(--surface-border)" }}
-    >
+    <aside style={{
+      width: 216,
+      flexShrink: 0,
+      display: "flex",
+      flexDirection: "column",
+      height: "100%",
+      background: "var(--surface-card)",
+      borderRight: BORDER,
+    }}>
+
       {/* Logo */}
-      <div
-        className="px-5 pt-4 pb-3 flex items-center"
-        style={{ borderBottom: "1px solid var(--surface-border)" }}
-      >
+      <div style={{ padding: "1rem 1.25rem 0.875rem", borderBottom: BORDER, display: "flex", alignItems: "center" }}>
         <Image
           src="/powersphere-logo.png"
           alt="Ammper Power Sphere"
           width={148}
           height={58}
           priority
-          style={{ width: "auto", height: "52px", objectFit: "contain" }}
+          style={{ width: "auto", height: "44px", objectFit: "contain" }}
         />
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-3">
-        <ul className="space-y-0.5 px-2">
+      <nav style={{ flex: 1, overflowY: "auto", padding: "0.625rem 0.5rem" }}>
+        <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 1 }}>
           {navItems.map((item) => {
+
             if (item.children) {
               const isOpen =
                 item.name === "Operations" ? operationsOpen :
@@ -92,38 +101,58 @@ export function Sidebar() {
                 <li key={item.name}>
                   <button
                     onClick={() => toggle && toggle((o) => !o)}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-colors"
                     style={{
+                      width: "100%",
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      padding: "0.45rem 0.625rem",
+                      borderRadius: 6,
+                      border: "none",
+                      cursor: "pointer",
+                      background: groupActive ? "rgba(204,17,17,0.07)" : "transparent",
                       color: groupActive ? "#cc1111" : "var(--text-color-secondary)",
-                      background: groupActive ? "rgba(204,17,17,0.08)" : "transparent",
                     }}
                     onMouseEnter={e => { if (!groupActive) (e.currentTarget as HTMLElement).style.background = "var(--surface-hover)" }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = groupActive ? "rgba(204,17,17,0.08)" : "transparent" }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = groupActive ? "rgba(204,17,17,0.07)" : "transparent" }}
                   >
-                    <span>{item.name}</span>
-                    <ChevronDown
-                      className="h-3.5 w-3.5 shrink-0 transition-transform duration-200"
-                      style={{ transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)" }}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <i className={item.icon} style={{ fontSize: 12, width: 14, textAlign: "center", flexShrink: 0 }} />
+                      <span style={{ fontSize: 12, fontWeight: 500 }}>{item.name}</span>
+                    </div>
+                    <i
+                      className="pi pi-angle-down"
+                      style={{
+                        fontSize: 11,
+                        flexShrink: 0,
+                        transition: "transform 0.2s",
+                        transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)",
+                      }}
                     />
                   </button>
+
                   {isOpen && (
-                    <ul className="mt-0.5 ml-2 space-y-0.5">
+                    <ul style={{ listStyle: "none", margin: "2px 0 2px 8px", padding: 0, display: "flex", flexDirection: "column", gap: 1 }}>
                       {item.children.map((child) => {
                         const active = pathname === child.href
                         return (
                           <li key={child.name}>
                             <Link
                               href={child.href}
-                              className="flex items-center gap-2 pl-4 pr-3 py-2 rounded-md text-sm transition-colors"
                               style={{
-                                color: active ? "#cc1111" : "var(--text-color-secondary)",
-                                background: active ? "rgba(204,17,17,0.10)" : "transparent",
+                                display: "flex", alignItems: "center", gap: 8,
+                                padding: "0.4rem 0.625rem",
+                                borderRadius: 6,
+                                fontSize: 12,
                                 fontWeight: active ? 600 : 400,
+                                color: active ? "#cc1111" : "var(--text-color-secondary)",
+                                background: active ? "rgba(204,17,17,0.08)" : "transparent",
                                 borderLeft: active ? "2px solid #cc1111" : "2px solid transparent",
+                                textDecoration: "none",
+                                transition: "background 0.15s, color 0.15s",
                               }}
                               onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = "var(--surface-hover)" }}
-                              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = active ? "rgba(204,17,17,0.10)" : "transparent" }}
+                              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = active ? "rgba(204,17,17,0.08)" : "transparent" }}
                             >
+                              <i className={child.icon} style={{ fontSize: 11, width: 14, textAlign: "center", flexShrink: 0 }} />
                               {child.name}
                             </Link>
                           </li>
@@ -140,16 +169,22 @@ export function Sidebar() {
               <li key={item.name}>
                 <Link
                   href={item.href!}
-                  className="flex items-center px-3 py-2 rounded-md text-sm transition-colors"
                   style={{
-                    color: active ? "#cc1111" : "var(--text-color-secondary)",
-                    background: active ? "rgba(204,17,17,0.10)" : "transparent",
+                    display: "flex", alignItems: "center", gap: 8,
+                    padding: "0.45rem 0.625rem",
+                    borderRadius: 6,
+                    fontSize: 12,
                     fontWeight: active ? 600 : 400,
+                    color: active ? "#cc1111" : "var(--text-color-secondary)",
+                    background: active ? "rgba(204,17,17,0.08)" : "transparent",
                     borderLeft: active ? "2px solid #cc1111" : "2px solid transparent",
+                    textDecoration: "none",
+                    transition: "background 0.15s, color 0.15s",
                   }}
                   onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = "var(--surface-hover)" }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = active ? "rgba(204,17,17,0.10)" : "transparent" }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = active ? "rgba(204,17,17,0.08)" : "transparent" }}
                 >
+                  <i className={item.icon} style={{ fontSize: 12, width: 14, textAlign: "center", flexShrink: 0 }} />
                   {item.name}
                 </Link>
               </li>
@@ -159,11 +194,22 @@ export function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div
-        className="px-4 py-3 text-xs"
-        style={{ borderTop: "1px solid var(--surface-border)", color: "var(--text-color-secondary)" }}
-      >
-        admin@powersphere.com
+      <div style={{
+        padding: "0.625rem 0.875rem",
+        borderTop: BORDER,
+        display: "flex", alignItems: "center", gap: 8,
+      }}>
+        <div style={{
+          width: 26, height: 26, borderRadius: 6,
+          background: "var(--surface-section)",
+          border: BORDER,
+          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+        }}>
+          <i className="pi pi-user" style={{ fontSize: 11, color: "var(--text-color-secondary)" }} />
+        </div>
+        <span style={{ fontSize: 11, color: "var(--text-color-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          admin@powersphere.com
+        </span>
       </div>
     </aside>
   )
