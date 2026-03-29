@@ -6,7 +6,6 @@ import { DashboardLayout } from "@/components/power-sphere/dashboard-layout"
 import { DataTable } from "primereact/datatable"
 import { Column } from "primereact/column"
 import { Dialog } from "primereact/dialog"
-import type { DataTableExpandedRows } from "primereact/datatable"
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type UploadedDocument = {
@@ -32,6 +31,7 @@ const clientTypes = [
   { id: "ems",          label: "EMS",                  icon: "pi pi-bolt" },
   { id: "independent",  label: "Independent Company",  icon: "pi pi-briefcase" },
   { id: "counterparty", label: "Counterparty",         icon: "pi pi-users" },
+  { id: "subsidiary",   label: "Subsidiary",           icon: "pi pi-sitemap" },
 ]
 
 const US_STATES = ["Alabama","Alaska","Arizona","Arkansas","California","Colorado","Connecticut","Delaware","Florida","Georgia","Hawaii","Idaho","Illinois","Indiana","Iowa","Kansas","Kentucky","Louisiana","Maine","Maryland","Massachusetts","Michigan","Minnesota","Mississippi","Missouri","Montana","Nebraska","Nevada","New Hampshire","New Jersey","New Mexico","New York","North Carolina","North Dakota","Ohio","Oklahoma","Oregon","Pennsylvania","Rhode Island","South Carolina","South Dakota","Tennessee","Texas","Utah","Vermont","Virginia","Washington","West Virginia","Wisconsin","Wyoming"]
@@ -167,6 +167,9 @@ export default function ClientConfigurationPage() {
       status: formData.energyTradesConfig.status ? "Active" : "Inactive",
       createdBy: "Current User",
       documents: formData.uploadedDocuments,
+      clientType: selectedClientType as Counterparty["clientType"],
+      parentId: formData.parentCompanyId || null,
+      emsId: null,
     })
     setFormData(buildEmptyForm())
     setExpandedSites([])
@@ -262,242 +265,374 @@ export default function ClientConfigurationPage() {
 }
 
 // ── Client Board Tab ───────────────────────────────────────────────────────
+const TC = {
+  ems:         { c: "#c0392b", bg: "rgba(192,57,43,0.07)",  border: "rgba(192,57,43,0.30)"  },
+  holding:     { c: "#2563eb", bg: "rgba(37,99,235,0.07)",  border: "rgba(37,99,235,0.25)"  },
+  subsidiary:  { c: "#16a34a", bg: "rgba(22,163,74,0.07)",  border: "rgba(22,163,74,0.25)"  },
+  independent: { c: "#7c3aed", bg: "rgba(124,58,237,0.07)", border: "rgba(124,58,237,0.25)" },
+  counterparty:{ c: "#b45309", bg: "rgba(180,83,9,0.07)",   border: "rgba(180,83,9,0.25)"   },
+}
+const TL: Record<string, string> = { ems:"EMS", holding:"Holding", subsidiary:"Subsidiary", independent:"Independent", counterparty:"Counterparty" }
+const TI: Record<string, string> = { ems:"pi-bolt", holding:"pi-building", subsidiary:"pi-sitemap", independent:"pi-briefcase", counterparty:"pi-users" }
+
+function TypePill({ type }: { type: string }) {
+  const tc = TC[type as keyof typeof TC]
+  if (!tc) return null
+  return (
+    <span style={{ display:"inline-flex", alignItems:"center", padding:"2px 8px", borderRadius:999, fontSize:10, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase", border:`1.5px solid ${tc.border}`, background:tc.bg, color:tc.c, flexShrink:0 }}>
+      {TL[type]}
+    </span>
+  )
+}
+
 function ClientBoardTab({
   counterparties, onDelete, onUpdate,
 }: { counterparties: Counterparty[]; onDelete: (id: string) => void; onUpdate: (c: Counterparty) => void }) {
-  const [expandedRows, setExpandedRows] = useState<DataTableExpandedRows>({})
+  const [filter, setFilter] = useState("all")
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [editingClient, setEditingClient] = useState<Counterparty | null>(null)
   const [editModalOpen, setEditModalOpen] = useState(false)
+
+  const byId = (id: string) => counterparties.find(c => c.id === id)
+  const toggleCollapse = (key: string) => setCollapsed(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
+
+  const emsList    = counterparties.filter(c => c.clientType === "ems")
+  const holdings   = counterparties.filter(c => c.clientType === "holding")
+  const subs       = counterparties.filter(c => c.clientType === "subsidiary")
+  const inds       = counterparties.filter(c => c.clientType === "independent")
+  const cpList     = counterparties.filter(c => c.clientType === "counterparty")
+
+  const activeCount = counterparties.filter(c => c.status === "Active").length
+
+  // ── Action buttons ─────────────────────────────────────────────────────────
+  const editBtn = (client: Counterparty) => (
+    <button
+      onClick={() => { setEditingClient({ ...client }); setEditModalOpen(true) }}
+      style={{ width:26, height:26, borderRadius:5, background:"transparent", border:"1px solid transparent", color:"var(--text-color-secondary)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}
+      onMouseEnter={e => { e.currentTarget.style.background="var(--surface-ground)"; e.currentTarget.style.borderColor="var(--surface-border)" }}
+      onMouseLeave={e => { e.currentTarget.style.background="transparent"; e.currentTarget.style.borderColor="transparent" }}
+    ><i className="pi pi-pencil" style={{ fontSize:11 }} /></button>
+  )
+  const delBtn = (client: Counterparty) => (
+    <button
+      onClick={() => onDelete(client.id)}
+      style={{ width:26, height:26, borderRadius:5, background:"transparent", border:"1px solid transparent", color:"var(--text-color-secondary)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}
+      onMouseEnter={e => { e.currentTarget.style.background="rgba(204,17,17,0.06)"; e.currentTarget.style.borderColor="rgba(204,17,17,0.3)"; e.currentTarget.style.color="#cc1111" }}
+      onMouseLeave={e => { e.currentTarget.style.background="transparent"; e.currentTarget.style.borderColor="transparent"; e.currentTarget.style.color="var(--text-color-secondary)" }}
+    ><i className="pi pi-trash" style={{ fontSize:11 }} /></button>
+  )
+  const Actions = ({ c }: { c: Counterparty }) => (
+    <div style={{ display:"flex", gap:4, flexShrink:0 }}>{editBtn(c)}{delBtn(c)}</div>
+  )
+
+  // ── EMS tag badge ──────────────────────────────────────────────────────────
+  const EMSTag = ({ emsId }: { emsId?: string | null }) => {
+    if (!emsId) return <span style={{ fontSize:10, color:"#bbb", padding:"2px 7px", border:"1px dashed #ddd", borderRadius:999, flexShrink:0 }}>No EMS</span>
+    const ems = byId(emsId)
+    if (!ems) return null
+    const tc = TC.ems
+    return (
+      <span style={{ display:"inline-flex", alignItems:"center", gap:4, fontSize:10, fontWeight:600, padding:"2px 8px", border:`1.5px solid ${tc.border}`, borderRadius:999, background:tc.bg, color:tc.c, flexShrink:0 }}>
+        <span style={{ width:5, height:5, borderRadius:"50%", background:tc.c }} />
+        {ems.name}
+      </span>
+    )
+  }
+
+  // ── Count chip ─────────────────────────────────────────────────────────────
+  const Chip = ({ n, label }: { n: number; label: string }) => (
+    <span style={{ fontSize:10, fontWeight:600, color:"var(--text-color-secondary)", background:"var(--surface-ground)", border:BORDER, borderRadius:999, padding:"1px 8px", flexShrink:0 }}>
+      {n} {label}{n !== 1 ? "s" : ""}
+    </span>
+  )
+
+  // ── Collapse button ────────────────────────────────────────────────────────
+  const CollapseBtn = ({ id }: { id: string }) => (
+    <button
+      onClick={() => toggleCollapse(id)}
+      style={{ width:22, height:22, borderRadius:4, background:"transparent", border:"none", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", color:"var(--text-color-secondary)", transform:collapsed.has(id) ? "rotate(-90deg)" : "none", transition:"transform 0.2s", flexShrink:0 }}
+    ><i className="pi pi-chevron-down" style={{ fontSize:10 }} /></button>
+  )
+
+  // ── Child row (subsidiary / independent) ───────────────────────────────────
+  const ChildRow = ({ client }: { client: Counterparty }) => {
+    const type = client.clientType ?? "independent"
+    const tc = TC[type as keyof typeof TC]
+    return (
+      <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 14px", borderRadius:8, border:`1.5px solid ${tc?.border ?? BORDER}`, background:"var(--surface-card)" }}>
+        <div style={{ width:24, height:24, borderRadius:5, flexShrink:0, background:tc?.bg, border:`1.5px solid ${tc?.border}`, display:"flex", alignItems:"center", justifyContent:"center" }}>
+          <i className={`pi ${TI[type]}`} style={{ fontSize:11, color:tc?.c }} />
+        </div>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontSize:13, fontWeight:600, color:"var(--text-color)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{client.name}</div>
+          <div style={{ fontSize:11, color:"var(--text-color-secondary)", marginTop:1 }}>{client.clientId}</div>
+        </div>
+        <TypePill type={type} />
+        <StatusPill status={client.status} />
+        <EMSTag emsId={client.emsId} />
+        <Actions c={client} />
+      </div>
+    )
+  }
+
+  // ── Holding block (header + subs list) ────────────────────────────────────
+  const HoldingBlock = ({ h, showEMSTag = true }: { h: Counterparty; showEMSTag?: boolean }) => {
+    const tc = TC.holding
+    const childSubs = subs.filter(s => s.parentId === h.id)
+    const colKey = `hold-${h.id}`
+    const isOpen = !collapsed.has(colKey)
+    return (
+      <div style={{ borderRadius:10, overflow:"hidden", border:`1.5px solid ${tc.border}`, background:"var(--surface-card)" }}>
+        <div style={{ padding:"11px 16px", display:"flex", alignItems:"center", gap:10, background:tc.bg, borderBottom: isOpen ? `1.5px solid ${tc.border}` : "none" }}>
+          <div style={{ width:26, height:26, borderRadius:6, flexShrink:0, background:"var(--surface-card)", border:`1.5px solid ${tc.border}`, display:"flex", alignItems:"center", justifyContent:"center" }}>
+            <i className="pi pi-building" style={{ fontSize:12, color:tc.c }} />
+          </div>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:"var(--text-color)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{h.name}</div>
+            <div style={{ fontSize:11, color:"var(--text-color-secondary)", marginTop:1 }}>{h.clientId}</div>
+          </div>
+          <TypePill type="holding" />
+          {childSubs.length > 0 && <Chip n={childSubs.length} label="sub" />}
+          <StatusPill status={h.status} />
+          {showEMSTag && <EMSTag emsId={h.emsId} />}
+          <Actions c={h} />
+          <CollapseBtn id={colKey} />
+        </div>
+        {isOpen && (
+          <div style={{ padding:"10px 14px", display:"flex", flexDirection:"column", gap:8 }}>
+            {childSubs.length > 0
+              ? childSubs.map(s => <ChildRow key={s.id} client={s} />)
+              : <div style={{ fontSize:12, color:"#bbb", padding:"8px 4px", textAlign:"center", border:"1px dashed var(--surface-border)", borderRadius:6 }}>No subsidiaries yet.</div>
+            }
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── EMS block ─────────────────────────────────────────────────────────────
+  const EMSBlock = ({ ems }: { ems: Counterparty }) => {
+    const tc = TC.ems
+    const colKey = `ems-${ems.id}`
+    const isOpen = !collapsed.has(colKey)
+    const attachedSubs = subs.filter(s => s.emsId === ems.id)
+    const holdingIds = [...new Set(attachedSubs.map(s => s.parentId).filter(Boolean))] as string[]
+    const attachedInds = inds.filter(i => i.emsId === ems.id)
+    const total = attachedSubs.length + attachedInds.length
+    return (
+      <div style={{ borderRadius:12, overflow:"hidden", border:`1.5px solid ${tc.border}`, background:"var(--surface-card)", boxShadow:"0 1px 4px rgba(0,0,0,0.06)" }}>
+        <div style={{ padding:"14px 18px", display:"flex", alignItems:"center", gap:12, background:tc.bg, borderBottom: isOpen ? `1.5px solid ${tc.border}` : "none" }}>
+          <div style={{ width:32, height:32, borderRadius:8, flexShrink:0, background:"var(--surface-card)", border:`1.5px solid ${tc.border}`, display:"flex", alignItems:"center", justifyContent:"center" }}>
+            <i className="pi pi-bolt" style={{ fontSize:14, color:tc.c }} />
+          </div>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontSize:14, fontWeight:700, color:"var(--text-color)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{ems.name}</div>
+            <div style={{ fontSize:11, color:"var(--text-color-secondary)", marginTop:1 }}>{ems.clientId}</div>
+          </div>
+          <TypePill type="ems" />
+          {total > 0 && <Chip n={total} label="client" />}
+          <StatusPill status={ems.status} />
+          <Actions c={ems} />
+          <CollapseBtn id={colKey} />
+        </div>
+        {isOpen && (
+          <div style={{ padding:"14px 16px", display:"flex", flexDirection:"column", gap:10 }}>
+            {total === 0 ? (
+              <div style={{ fontSize:12, color:"#bbb", padding:"10px 4px", textAlign:"center", border:"1px dashed var(--surface-border)", borderRadius:6 }}>No clients attached to this EMS.</div>
+            ) : (
+              <>
+                {holdingIds.map(hid => {
+                  const h = byId(hid)
+                  if (!h) return null
+                  const tc2 = TC.holding
+                  const subsHere = attachedSubs.filter(s => s.parentId === hid)
+                  return (
+                    <div key={hid} style={{ borderRadius:10, overflow:"hidden", border:`1.5px solid ${tc2.border}` }}>
+                      <div style={{ padding:"10px 14px", display:"flex", alignItems:"center", gap:10, background:tc2.bg, borderBottom:`1.5px solid ${tc2.border}` }}>
+                        <div style={{ width:22, height:22, borderRadius:5, background:"var(--surface-card)", border:`1.5px solid ${tc2.border}`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                          <i className="pi pi-building" style={{ fontSize:10, color:tc2.c }} />
+                        </div>
+                        <span style={{ flex:1, fontSize:12, fontWeight:700, color:"var(--text-color)" }}>{h.name}</span>
+                        <TypePill type="holding" />
+                        <Chip n={subsHere.length} label="sub" />
+                      </div>
+                      <div style={{ padding:"10px 14px", display:"flex", flexDirection:"column", gap:8 }}>
+                        {subsHere.map(s => <ChildRow key={s.id} client={s} />)}
+                      </div>
+                    </div>
+                  )
+                })}
+                {attachedInds.map(c => <ChildRow key={c.id} client={c} />)}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── Counterparty row ───────────────────────────────────────────────────────
+  const CPRow = ({ cp }: { cp: Counterparty }) => {
+    const tc = TC.counterparty
+    return (
+      <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 14px", borderRadius:8, border:`1.5px solid ${tc.border}`, background:"var(--surface-card)" }}>
+        <div style={{ width:24, height:24, borderRadius:5, flexShrink:0, background:tc.bg, border:`1.5px solid ${tc.border}`, display:"flex", alignItems:"center", justifyContent:"center" }}>
+          <i className="pi pi-users" style={{ fontSize:11, color:tc.c }} />
+        </div>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontSize:13, fontWeight:600, color:"var(--text-color)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{cp.name}</div>
+          <div style={{ fontSize:11, color:"var(--text-color-secondary)", marginTop:1 }}>{cp.clientId}</div>
+        </div>
+        <TypePill type="counterparty" />
+        <StatusPill status={cp.status} />
+        <Actions c={cp} />
+      </div>
+    )
+  }
+
+  // ── Filter bar data ────────────────────────────────────────────────────────
+  const FILTERS = [
+    { key:"all",         label:"All",         count: counterparties.length, dot: null },
+    { key:"ems",         label:"EMS",         count: emsList.length,        dot: TC.ems.c },
+    { key:"holding",     label:"Holding",     count: holdings.length,       dot: TC.holding.c },
+    { key:"subsidiary",  label:"Subsidiary",  count: subs.length,           dot: TC.subsidiary.c },
+    { key:"independent", label:"Independent", count: inds.length,           dot: TC.independent.c },
+    { key:"counterparty",label:"Counterparty",count: cpList.length,         dot: TC.counterparty.c },
+  ]
+
+  // ── Board render ──────────────────────────────────────────────────────────
+  const renderBoard = () => {
+    if (counterparties.length === 0)
+      return <div style={{ textAlign:"center", padding:"3rem 0", color:"var(--text-color-secondary)", fontSize:13 }}>No clients registered yet.</div>
+    if (filter === "ems")         return emsList.map(e => <EMSBlock key={e.id} ems={e} />)
+    if (filter === "holding")     return holdings.map(h => <HoldingBlock key={h.id} h={h} />)
+    if (filter === "subsidiary")  return subs.map(s => <ChildRow key={s.id} client={s} />)
+    if (filter === "independent") return inds.map(i => <ChildRow key={i.id} client={i} />)
+    if (filter === "counterparty")return cpList.map(cp => <CPRow key={cp.id} cp={cp} />)
+    // All view
+    return (
+      <>
+        {emsList.map(e => <EMSBlock key={e.id} ems={e} />)}
+        {holdings.map(h => <HoldingBlock key={h.id} h={h} />)}
+        {inds.filter(i => !i.emsId).map(i => <ChildRow key={i.id} client={i} />)}
+        {cpList.map(cp => <CPRow key={cp.id} cp={cp} />)}
+      </>
+    )
+  }
 
   const handleEditSave = () => {
     if (editingClient) { onUpdate(editingClient); setEditModalOpen(false); setEditingClient(null) }
   }
-
   const setField = (field: keyof Counterparty, value: string) => {
     if (editingClient) setEditingClient({ ...editingClient, [field]: value })
   }
 
-  // ── Column bodies ──
-  const nameBody = (cp: Counterparty) => (
-    <div>
-      <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-color)" }}>{cp.name}</div>
-      <div style={{ fontSize: 11, color: "var(--text-color-secondary)", marginTop: 1 }}>{cp.address}</div>
-    </div>
-  )
-  const contactBody = (cp: Counterparty) => (
-    <div>
-      <div style={{ fontSize: 13, color: "var(--text-color)" }}>{cp.directoryName}</div>
-      <div style={{ fontSize: 11, color: "var(--text-color-secondary)", marginTop: 1 }}>{cp.directoryEmail}</div>
-    </div>
-  )
-  const statusBody = (cp: Counterparty) => <StatusPill status={cp.status} />
-  const actionsBody = (cp: Counterparty) => (
-    <div style={{ display: "flex", gap: 4 }}>
-      <button
-        title="Edit"
-        onClick={() => { setEditingClient({ ...cp }); setEditModalOpen(true) }}
-        style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-color-secondary)", padding: "3px 5px", borderRadius: 4, display: "flex", alignItems: "center" }}
-        onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = "#cc1111"}
-        onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = "var(--text-color-secondary)"}
-      >
-        <i className="pi pi-pencil" style={{ fontSize: 12 }} />
-      </button>
-      <button
-        title="Delete"
-        onClick={() => onDelete(cp.id)}
-        style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-color-secondary)", padding: "3px 5px", borderRadius: 4, display: "flex", alignItems: "center" }}
-        onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = "#cc1111"}
-        onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = "var(--text-color-secondary)"}
-      >
-        <i className="pi pi-trash" style={{ fontSize: 12 }} />
-      </button>
-    </div>
-  )
-
-  const expansionTemplate = (cp: Counterparty) => (
-    <div style={{ padding: "1rem 1.25rem", background: "var(--surface-ground)", display: "flex", flexDirection: "column", gap: "1rem" }}>
-      {/* Audit */}
-      <div>
-        <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-color-secondary)", marginBottom: 8 }}>Audit Information</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
-          {[["Created By", cp.createdBy], ["Created On", cp.createdOn], ["Modified By", cp.modifiedBy], ["Last Modified", cp.lastModifiedOn]].map(([label, val]) => (
-            <div key={label} style={{ padding: "0.5rem 0.625rem", borderRadius: 6, border: BORDER, background: "var(--surface-card)" }}>
-              <div style={{ fontSize: 10, color: "var(--text-color-secondary)", marginBottom: 2 }}>{label}</div>
-              <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text-color)" }}>{val}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-      {/* Documents */}
-      {cp.documents && cp.documents.length > 0 && (
-        <div>
-          <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-color-secondary)", marginBottom: 8 }}>Documents</div>
-          <div style={{ borderRadius: 8, overflow: "hidden", border: BORDER }}>
-            <DataTable value={cp.documents} size="small" style={{ background: "var(--surface-card)" }}
-              pt={{ thead: { style: { background: "var(--surface-card)" } }, tbody: { style: { background: "var(--surface-card)" } }, column: { headerCell: { style: thStyle }, bodyCell: { style: tdStyle } } }}>
-              <Column header="Document" body={(d: UploadedDocument) => (
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <i className="pi pi-file" style={{ fontSize: 12, color: "var(--text-color-secondary)" }} />
-                  <span style={{ fontSize: 12 }}>{d.name}</span>
-                </div>
-              )} />
-              <Column field="description" header="Description" />
-              <Column field="uploadedBy" header="Uploaded By" />
-              <Column field="lastModified" header="Last Modified" />
-            </DataTable>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-
-  const activeCount = counterparties.filter(c => c.status === "Active").length
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+    <div style={{ display:"flex", flexDirection:"column", gap:"1.25rem" }}>
+
       {/* Edit Modal */}
       <Dialog
         header={
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 26, height: 26, borderRadius: 6, background: "rgba(204,17,17,0.10)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <i className="pi pi-pencil" style={{ fontSize: 11, color: "#cc1111" }} />
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <div style={{ width:26, height:26, borderRadius:6, background:"rgba(204,17,17,0.10)", display:"flex", alignItems:"center", justifyContent:"center" }}>
+              <i className="pi pi-pencil" style={{ fontSize:11, color:"#cc1111" }} />
             </div>
-            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-color)" }}>Edit Client</span>
+            <span style={{ fontSize:13, fontWeight:700, color:"var(--text-color)" }}>Edit Client</span>
           </div>
         }
-        visible={editModalOpen}
-        onHide={() => setEditModalOpen(false)}
-        style={{ width: 680 }}
-        modal
-        pt={{
-          header: { style: { borderBottom: BORDER, padding: "0.75rem 1rem" } },
-          content: { style: { padding: "1rem" } },
-        }}
+        visible={editModalOpen} onHide={() => setEditModalOpen(false)} style={{ width:680 }} modal
+        pt={{ header:{ style:{ borderBottom:BORDER, padding:"0.75rem 1rem" } }, content:{ style:{ padding:"1rem" } } }}
       >
         {editingClient && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            {/* Status toggle */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.625rem 0.875rem", borderRadius: 8, background: "var(--surface-section)", border: BORDER }}>
+          <div style={{ display:"flex", flexDirection:"column", gap:"1rem" }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0.625rem 0.875rem", borderRadius:8, background:"var(--surface-section)", border:BORDER }}>
               <div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-color)" }}>Client Status</div>
-                <div style={{ fontSize: 11, color: "var(--text-color-secondary)", marginTop: 2 }}>Toggle to activate or deactivate</div>
+                <div style={{ fontSize:12, fontWeight:600, color:"var(--text-color)" }}>Client Status</div>
+                <div style={{ fontSize:11, color:"var(--text-color-secondary)", marginTop:2 }}>Toggle to activate or deactivate</div>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 11, color: "var(--text-color-secondary)" }}>Inactive</span>
-                <Toggle
-                  checked={editingClient.status === "Active"}
-                  onChange={v => setEditingClient({ ...editingClient, status: v ? "Active" : "Inactive" })}
-                />
-                <span style={{ fontSize: 11, fontWeight: 600, color: editingClient.status === "Active" ? "#cc1111" : "var(--text-color-secondary)" }}>Active</span>
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ fontSize:11, color:"var(--text-color-secondary)" }}>Inactive</span>
+                <Toggle checked={editingClient.status === "Active"} onChange={v => setEditingClient({ ...editingClient, status: v ? "Active" : "Inactive" })} />
+                <span style={{ fontSize:11, fontWeight:600, color: editingClient.status === "Active" ? "#cc1111" : "var(--text-color-secondary)" }}>Active</span>
               </div>
             </div>
-
-            {/* Company info */}
             <div>
-              <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-color-secondary)", marginBottom: 8 }}>Company Information</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <FieldGroup label="Company Name">
-                  <input value={editingClient.name} onChange={e => setField("name", e.target.value)} style={nativeInput} />
-                </FieldGroup>
-                <FieldGroup label="Address">
-                  <input value={editingClient.address} onChange={e => setField("address", e.target.value)} style={nativeInput} />
-                </FieldGroup>
+              <div style={{ fontSize:10, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em", color:"var(--text-color-secondary)", marginBottom:8 }}>Company Information</div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                <FieldGroup label="Company Name"><input value={editingClient.name} onChange={e => setField("name", e.target.value)} style={nativeInput} /></FieldGroup>
+                <FieldGroup label="Address"><input value={editingClient.address} onChange={e => setField("address", e.target.value)} style={nativeInput} /></FieldGroup>
               </div>
             </div>
-
-            {/* Energy trades */}
             <div>
-              <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-color-secondary)", marginBottom: 8 }}>Energy Trades Configuration</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-                <FieldGroup label="Client ID">
-                  <input value={editingClient.clientId} onChange={e => setField("clientId", e.target.value)} style={nativeInput} />
-                </FieldGroup>
-                <FieldGroup label="Counterparty">
-                  <input value={editingClient.counterparty} onChange={e => setField("counterparty", e.target.value)} style={nativeInput} />
-                </FieldGroup>
-                <FieldGroup label="MIS Shortname">
-                  <input value={editingClient.misShortname} onChange={e => setField("misShortname", e.target.value)} style={nativeInput} />
-                </FieldGroup>
+              <div style={{ fontSize:10, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em", color:"var(--text-color-secondary)", marginBottom:8 }}>Contact Information</div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
+                <FieldGroup label="Contact Name"><input value={editingClient.directoryName} onChange={e => setField("directoryName", e.target.value)} style={nativeInput} /></FieldGroup>
+                <FieldGroup label="Contact Email"><input value={editingClient.directoryEmail} onChange={e => setField("directoryEmail", e.target.value)} style={nativeInput} /></FieldGroup>
+                <FieldGroup label="Contact Phone"><input value={editingClient.directoryPhone} onChange={e => setField("directoryPhone", e.target.value)} style={nativeInput} /></FieldGroup>
               </div>
             </div>
-
-            {/* Contact */}
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-color-secondary)", marginBottom: 8 }}>Contact Information</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-                <FieldGroup label="Contact Name">
-                  <input value={editingClient.directoryName} onChange={e => setField("directoryName", e.target.value)} style={nativeInput} />
-                </FieldGroup>
-                <FieldGroup label="Contact Email">
-                  <input value={editingClient.directoryEmail} onChange={e => setField("directoryEmail", e.target.value)} style={nativeInput} />
-                </FieldGroup>
-                <FieldGroup label="Contact Phone">
-                  <input value={editingClient.directoryPhone} onChange={e => setField("directoryPhone", e.target.value)} style={nativeInput} />
-                </FieldGroup>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: "0.5rem", borderTop: BORDER }}>
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:8, paddingTop:"0.5rem", borderTop:BORDER }}>
               <button style={btnSecondary} onClick={() => setEditModalOpen(false)}>Cancel</button>
-              <button style={btnPrimary} onClick={handleEditSave}>
-                <i className="pi pi-check" style={{ fontSize: 11 }} />
-                Save Changes
-              </button>
+              <button style={btnPrimary} onClick={handleEditSave}><i className="pi pi-check" style={{ fontSize:11 }} /> Save Changes</button>
             </div>
           </div>
         )}
       </Dialog>
 
       {/* KPI bar */}
-      <div style={{ display: "inline-flex", alignItems: "center", gap: "1rem", padding: "0.5rem 0.875rem", borderRadius: 10, background: "var(--surface-card)", border: BORDER }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ width: 26, height: 26, borderRadius: 6, background: "rgba(204,17,17,0.10)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <i className="pi pi-users" style={{ fontSize: 12, color: "#cc1111" }} />
-          </div>
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-color-secondary)", lineHeight: 1 }}>Counterparties</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text-color)", lineHeight: 1.2 }}>{counterparties.length}</div>
-          </div>
-        </div>
-        <div style={{ width: 1, height: 24, background: "var(--surface-border)" }} />
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <i className="pi pi-check-circle" style={{ fontSize: 11, color: "#2d7a2d" }} />
-          <span style={{ fontSize: 11, color: "var(--text-color-secondary)" }}>Active</span>
-          <span style={{ fontSize: 14, fontWeight: 700, color: "#2d7a2d" }}>{activeCount}</span>
-        </div>
-        <div style={{ width: 1, height: 24, background: "var(--surface-border)" }} />
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <i className="pi pi-minus-circle" style={{ fontSize: 11, color: "var(--text-color-secondary)" }} />
-          <span style={{ fontSize: 11, color: "var(--text-color-secondary)" }}>Inactive</span>
-          <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-color-secondary)" }}>{counterparties.length - activeCount}</span>
-        </div>
+      <div style={{ display:"inline-flex", alignItems:"center", gap:"1rem", padding:"0.5rem 0.875rem", borderRadius:10, background:"var(--surface-card)", border:BORDER }}>
+        {[
+          { icon:"pi-users", label:"Total Clients", val: counterparties.length, color:"#cc1111", bg:"rgba(204,17,17,0.10)" },
+          { icon:"pi-check-circle", label:"Active", val: activeCount, color:"#2d7a2d", bg:undefined },
+          { icon:"pi-minus-circle", label:"Inactive", val: counterparties.length - activeCount, color:"var(--text-color-secondary)", bg:undefined },
+        ].map((kpi, i) => (
+          <React.Fragment key={kpi.label}>
+            {i > 0 && <div style={{ width:1, height:24, background:"var(--surface-border)" }} />}
+            <div style={{ display:"flex", alignItems:"center", gap:i === 0 ? 8 : 6 }}>
+              {i === 0
+                ? <div style={{ width:26, height:26, borderRadius:6, background:kpi.bg, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><i className={`pi ${kpi.icon}`} style={{ fontSize:12, color:kpi.color }} /></div>
+                : <i className={`pi ${kpi.icon}`} style={{ fontSize:11, color:kpi.color }} />
+              }
+              {i === 0
+                ? <div><div style={{ fontSize:10, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em", color:"var(--text-color-secondary)", lineHeight:1 }}>{kpi.label}</div><div style={{ fontSize:16, fontWeight:700, color:"var(--text-color)", lineHeight:1.2 }}>{kpi.val}</div></div>
+                : <><span style={{ fontSize:11, color:"var(--text-color-secondary)" }}>{kpi.label}</span><span style={{ fontSize:14, fontWeight:700, color:kpi.color }}>{kpi.val}</span></>
+              }
+            </div>
+          </React.Fragment>
+        ))}
       </div>
 
-      {/* Table */}
-      <div style={{ borderRadius: 16, overflow: "hidden", border: BORDER }}>
-        <DataTable
-          value={counterparties}
-          dataKey="id"
-          expandedRows={expandedRows}
-          onRowToggle={e => setExpandedRows(e.data as DataTableExpandedRows)}
-          rowExpansionTemplate={expansionTemplate}
-          size="small"
-          emptyMessage="No counterparties registered yet. Go to Client Registration to add one."
-          style={{ background: "var(--surface-card)" }}
-          pt={{
-            thead: { style: { background: "var(--surface-card)" } },
-            tbody: { style: { background: "var(--surface-card)" } },
-            column: { headerCell: { style: thStyle }, bodyCell: { style: tdStyle } },
-          }}
-        >
-          <Column expander style={{ width: "2.5rem" }} />
-          <Column header="Name" body={nameBody} sortable sortField="name" style={{ minWidth: 200 }} />
-          <Column field="clientId" header="Client ID" style={{ fontFamily: "monospace", fontSize: 12, width: 120 }} />
-          <Column field="misShortname" header="MIS Shortname" style={{ fontFamily: "monospace", fontSize: 12, width: 130 }} />
-          <Column header="Contact" body={contactBody} style={{ minWidth: 180 }} />
-          <Column header="Status" body={statusBody} style={{ width: 100 }} />
-          <Column header="" body={actionsBody} style={{ width: 90 }} />
-        </DataTable>
+      {/* Filter bar */}
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+        {FILTERS.map(f => {
+          const isActive = filter === f.key
+          const tc = f.key !== "all" ? TC[f.key as keyof typeof TC] : null
+          return (
+            <button
+              key={f.key}
+              onClick={() => setFilter(f.key)}
+              style={{
+                display:"inline-flex", alignItems:"center", gap:6,
+                padding:"5px 13px", borderRadius:999, fontSize:11, fontWeight:600, cursor:"pointer",
+                border:`1.5px solid ${isActive ? (tc?.border ?? "var(--text-color)") : "var(--surface-border)"}`,
+                background: isActive ? (tc?.bg ?? "rgba(0,0,0,0.06)") : "transparent",
+                color: isActive ? (tc?.c ?? "var(--text-color)") : "var(--text-color-secondary)",
+              }}
+            >
+              {f.dot && isActive && <span style={{ width:6, height:6, borderRadius:"50%", background:f.dot, flexShrink:0 }} />}
+              {f.label}
+              <span style={{ opacity:0.65 }}>{f.count}</span>
+            </button>
+          )
+        })}
+        <span style={{ marginLeft:"auto", fontSize:11, color:"var(--text-color-secondary)" }}>
+          {counterparties.filter(c => c.clientType !== "ems").length} client{counterparties.filter(c => c.clientType !== "ems").length !== 1 ? "s" : ""} · {emsList.length} EMS
+        </span>
+      </div>
+
+      {/* Board */}
+      <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+        {renderBoard()}
       </div>
     </div>
   )
@@ -654,9 +789,11 @@ function ClientRegistrationTab({
   const [uploadModalOpen, setUploadModalOpen] = useState(false)
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [pendingDescription, setPendingDescription] = useState("")
+  const { counterparties } = useCounterparties()
 
   const isCounterparty = selectedClientType === "counterparty"
   const isEMS = selectedClientType === "ems"
+  const isSubsidiary = selectedClientType === "subsidiary"
 
   const handleAddDocument = () => {
     if (!pendingFile) return
@@ -795,6 +932,23 @@ function ClientRegistrationTab({
         <FieldGroup label="Company Name">
           <input value={formData.name} onChange={e => onInputChange("name", e.target.value)} placeholder="Enter company name" style={nativeInput} />
         </FieldGroup>
+        {isSubsidiary && (
+          <FieldGroup label="Parent Company *">
+            <select
+              value={formData.parentCompanyId}
+              onChange={e => onInputChange("parentCompanyId", e.target.value)}
+              style={{ ...nativeInput, borderColor: !formData.parentCompanyId ? "#cc1111" : undefined }}
+            >
+              <option value="">Select parent company</option>
+              {counterparties.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            {!formData.parentCompanyId && (
+              <span style={{ fontSize: 10, color: "#cc1111", marginTop: 3 }}>Required for Subsidiary type</span>
+            )}
+          </FieldGroup>
+        )}
         <FieldGroup label="Short Company Name">
           <input value={formData.shortName} onChange={e => onInputChange("shortName", e.target.value)} placeholder="Short name" style={nativeInput} />
         </FieldGroup>
@@ -1150,9 +1304,9 @@ function ClientRegistrationTab({
         {/* Submit */}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: "0.75rem", borderTop: BORDER }}>
           <button
-            style={{ ...btnPrimary, opacity: !formData.name ? 0.4 : 1, cursor: !formData.name ? "not-allowed" : "pointer" }}
+            style={{ ...btnPrimary, opacity: (!formData.name || (isSubsidiary && !formData.parentCompanyId)) ? 0.4 : 1, cursor: (!formData.name || (isSubsidiary && !formData.parentCompanyId)) ? "not-allowed" : "pointer" }}
             onClick={onSubmit}
-            disabled={!formData.name}
+            disabled={!formData.name || (isSubsidiary && !formData.parentCompanyId)}
           >
             <i className="pi pi-check" style={{ fontSize: 11 }} />
             Register Client
@@ -1179,6 +1333,7 @@ function buildEmptyForm() {
     mwh: "", contactName: "", contactEmail: "", contactPhone: "", contactRole: "", contactOtherRole: "",
     qse: "", resourceNames: "", resourceIds: "", directory: "", counterparty: "", clientId: "",
     misShortname: "", directoryName: "", directoryEmail: "", directoryPhone: "", status: true,
+    parentCompanyId: "",
     programs: { fourCP: false, ers: false, edr: false, clm: false, rrs: false, ecrs: false, regulationService: false, nonSpinReverseService: false, meterReadings: false, api: false, marketTransactions: false },
     marketTransactionsOptions: { energyTrades: false, ptp: false, tpo: false },
     energyTradesConfig: { clientId: "", counterparty: "", misShortname: "", status: true },
