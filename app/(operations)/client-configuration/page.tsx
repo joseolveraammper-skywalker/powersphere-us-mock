@@ -1,7 +1,8 @@
 "use client"
 
-import React, { useState, useRef } from "react"
+import React, { useState, useRef, useEffect } from "react"
 import { useCounterparties, type Counterparty } from "@/lib/counterparty-context"
+import { getOperators, createOperator, deleteOperator, type OperatorRow } from "@/lib/actions/operators"
 import { DashboardLayout } from "@/components/power-sphere/dashboard-layout"
 import { DataTable } from "primereact/datatable"
 import { Column } from "primereact/column"
@@ -491,7 +492,7 @@ function ClientBoardTab({
           }}
         >
           <Column expander style={{ width: "2.5rem" }} />
-          <Column header="Name" body={nameBody} sortable sortField="name" style={{ minWidth: 200 }} />
+          <Column header="Client name" body={nameBody} sortable sortField="name" style={{ minWidth: 200 }} />
           <Column field="clientId" header="Client ID" style={{ fontFamily: "monospace", fontSize: 12, width: 120 }} />
           <Column field="misShortname" header="MIS Shortname" style={{ fontFamily: "monospace", fontSize: 12, width: 130 }} />
           <Column header="Contact" body={contactBody} style={{ minWidth: 180 }} />
@@ -505,11 +506,46 @@ function ClientBoardTab({
 
 // ── Internal Board Tab ─────────────────────────────────────────────────────
 function InternalBoardTab() {
+  const [operators, setOperators] = useState<OperatorRow[]>([])
+
+  useEffect(() => { getOperators().then(setOperators) }, [])
+
+  const handleDelete = async (id: string) => {
+    await deleteOperator(id)
+    setOperators(prev => prev.filter(o => o.id !== id))
+  }
+
+  const modulesBody = (op: OperatorRow) => {
+    const active = [
+      op.moduleRealTimeOps    && "Real Time Ops",
+      op.moduleReportsRepo    && "Reports",
+      op.moduleCryptoMiners   && "Crypto",
+      op.moduleIndirectMarket && "Indirect Market",
+    ].filter(Boolean) as string[]
+    return active.length ? (
+      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+        {active.map(m => (
+          <span key={m} style={{ padding: "0.15rem 0.45rem", borderRadius: 4, fontSize: 10, fontWeight: 600, background: "rgba(204,17,17,0.08)", color: "#cc1111" }}>{m}</span>
+        ))}
+      </div>
+    ) : <span style={{ fontSize: 12, color: "var(--text-color-secondary)" }}>—</span>
+  }
+
+  const actionsBody = (op: OperatorRow) => (
+    <button onClick={() => handleDelete(op.id)}
+      style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-color-secondary)", padding: "3px 5px", borderRadius: 4, display: "flex", alignItems: "center" }}
+      onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = "#cc1111"}
+      onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = "var(--text-color-secondary)"}
+    >
+      <i className="pi pi-trash" style={{ fontSize: 12 }} />
+    </button>
+  )
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
       <div style={{ borderRadius: 16, overflow: "hidden", border: BORDER }}>
         <DataTable
-          value={[]}
+          value={operators}
           size="small"
           emptyMessage="No internal operators registered yet. Go to Configuration to add one."
           style={{ background: "var(--surface-card)" }}
@@ -523,7 +559,8 @@ function InternalBoardTab() {
           <Column field="operatorId"   header="Operator ID"   style={{ width: 140, fontFamily: "monospace", fontSize: 12 }} />
           <Column field="email"        header="Email"         style={{ minWidth: 200 }} />
           <Column field="phoneNumber"  header="Phone"         style={{ width: 140 }} />
-          <Column field="modules"      header="Module Access" style={{ minWidth: 200 }} />
+          <Column header="Module Access" body={modulesBody}   style={{ minWidth: 220 }} />
+          <Column header=""            body={actionsBody}     style={{ width: 50 }} />
         </DataTable>
       </div>
     </div>
@@ -538,8 +575,18 @@ function NonParticipantRegistrationTab() {
 
   const toggleModule = (key: keyof typeof moduleAccess) => setModuleAccess(p => ({ ...p, [key]: !p[key] }))
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!operatorData.operatorName || !operatorData.operatorId) return
+    await createOperator({
+      operatorName:        operatorData.operatorName,
+      email:               operatorData.email,
+      phoneNumber:         operatorData.phoneNumber,
+      operatorId:          operatorData.operatorId,
+      moduleRealTimeOps:   moduleAccess.realTimeOperations,
+      moduleReportsRepo:   moduleAccess.reportsRepository,
+      moduleCryptoMiners:  moduleAccess.cryptocurrencyMiners,
+      moduleIndirectMarket:moduleAccess.indirectMarketParticipants,
+    })
     setOperatorData({ operatorName: "", email: "", phoneNumber: "", operatorId: "" })
     setModuleAccess({ realTimeOperations: false, reportsRepository: false, cryptocurrencyMiners: false, indirectMarketParticipants: false })
   }

@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Counterparty {
+  id             String     @id @default(cuid())
+  name           String
+  address        String     @default("")
+  counterparty   String     @default("")
+  clientId       String     @default("")
+  misShortname   String     @default("")
+  directoryName  String     @default("")
+  directoryEmail String     @default("")
+  directoryPhone String     @default("")
+  status         String     @default("Active")
+  createdBy      String     @default("")
+  createdOn      String     @default("")
+  modifiedBy     String     @default("")
+  lastModifiedOn String     @default("")
+  documents      Document[]
+  sites          Site[]
+}
+
+model Document {
+  id             String       @id @default(cuid())
+  name           String
+  description    String       @default("")
+  uploadedBy     String       @default("")
+  lastModified   String       @default("")
+  counterparty   Counterparty @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
+  counterpartyId String
+}
+
+model Site {
+  id                   String       @id @default(cuid())
+  siteName             String       @default("")
+  resourceType         String       @default("")
+  esiId                String       @default("")
+  address              String       @default("")
+  state                String       @default("")
+  city                 String       @default("")
+  zipCode              String       @default("")
+  zipCodePlus4         String       @default("")
+  contractStartDate    String       @default("")
+  contractEndDate      String       @default("")
+  tdsp                 String       @default("")
+  realTimeOperations   Boolean      @default(false)
+  esrAssetCode         String       @default("")
+  esrStationVoltage    String       @default("")
+  esrTotalLoadAtPod    String       @default("")
+  esrInterruptibleLoad String       @default("")
+  nclrAssetCode        String       @default("")
+  nclrStationVoltage   String       @default("")
+  nclrStorageCapacity  String       @default("")
+  nclrPowerCapacity    String       @default("")
+  nclrProgramEcrs      Boolean      @default(false)
+  nclrProgramRegup     Boolean      @default(false)
+  nclrProgramRegdown   Boolean      @default(false)
+  nclrProgramRrs       Boolean      @default(false)
+  nclrProgramNonSpin   Boolean      @default(false)
+  counterparty         Counterparty @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
+  counterpartyId       String
+}
+
+model Operator {
+  id                   String   @id @default(cuid())
+  operatorName         String
+  email                String   @default("")
+  phoneNumber          String   @default("")
+  operatorId           String   @unique
+  moduleRealTimeOps    Boolean  @default(false)
+  moduleReportsRepo    Boolean  @default(false)
+  moduleCryptoMiners   Boolean  @default(false)
+  moduleIndirectMarket Boolean  @default(false)
+  createdAt            DateTime @default(now())
+}
