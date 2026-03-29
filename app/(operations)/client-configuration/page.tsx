@@ -603,31 +603,37 @@ function ClientBoardTab({
         ))}
       </div>
 
-      {/* Table */}
-      <div style={{ borderRadius: 16, overflow: "hidden", border: BORDER }}>
-        <DataTable
-          value={counterparties}
-          dataKey="id"
-          expandedRows={expandedRows}
-          onRowToggle={e => setExpandedRows(e.data as DataTableExpandedRows)}
-          rowExpansionTemplate={expansionTemplate}
-          size="small"
-          emptyMessage="No counterparties registered yet. Go to Client Registration to add one."
-          style={{ background: "var(--surface-card)" }}
-          pt={{
-            thead: { style: { background: "var(--surface-card)" } },
-            tbody: { style: { background: "var(--surface-card)" } },
-            column: { headerCell: { style: thStyle }, bodyCell: { style: tdStyle } },
-          }}
-        >
-          <Column expander style={{ width: "2.5rem" }} />
-          <Column header="Name" body={nameBody} sortable sortField="name" style={{ minWidth: 200 }} />
-          <Column field="clientId" header="Client ID" style={{ fontFamily: "monospace", fontSize: 12, width: 120 }} />
-          <Column field="misShortname" header="MIS Shortname" style={{ fontFamily: "monospace", fontSize: 12, width: 130 }} />
-          <Column header="Contact" body={contactBody} style={{ minWidth: 180 }} />
-          <Column header="Status" body={statusBody} style={{ width: 100 }} />
-          <Column header="" body={actionsBody} style={{ width: 90 }} />
-        </DataTable>
+      {/* Filter bar */}
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+        {FILTERS.map(f => {
+          const isActive = filter === f.key
+          const tc = f.key !== "all" ? TC[f.key as keyof typeof TC] : null
+          return (
+            <button
+              key={f.key}
+              onClick={() => setFilter(f.key)}
+              style={{
+                display:"inline-flex", alignItems:"center", gap:6,
+                padding:"5px 13px", borderRadius:999, fontSize:11, fontWeight:600, cursor:"pointer",
+                border:`1.5px solid ${isActive ? (tc?.border ?? "var(--text-color)") : "var(--surface-border)"}`,
+                background: isActive ? (tc?.bg ?? "rgba(0,0,0,0.06)") : "transparent",
+                color: isActive ? (tc?.c ?? "var(--text-color)") : "var(--text-color-secondary)",
+              }}
+            >
+              {f.dot && isActive && <span style={{ width:6, height:6, borderRadius:"50%", background:f.dot, flexShrink:0 }} />}
+              {f.label}
+              <span style={{ opacity:0.65 }}>{f.count}</span>
+            </button>
+          )
+        })}
+        <span style={{ marginLeft:"auto", fontSize:11, color:"var(--text-color-secondary)" }}>
+          {counterparties.filter(c => c.clientType !== "ems").length} client{counterparties.filter(c => c.clientType !== "ems").length !== 1 ? "s" : ""} · {emsList.length} EMS
+        </span>
+      </div>
+
+      {/* Board */}
+      <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+        {renderBoard()}
       </div>
     </div>
   )
