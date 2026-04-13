@@ -1,24 +1,51 @@
 "use client"
 
-import React, { useState, useRef, useMemo } from "react"
+import React, { useState, useRef, useMemo, useEffect } from "react"
 import { DashboardLayout } from "@/components/power-sphere/dashboard-layout"
 import { DataTable } from "primereact/datatable"
 import { Column } from "primereact/column"
-import { Button } from "primereact/button"
-import { InputText } from "primereact/inputtext"
-import { Dropdown } from "primereact/dropdown"
 import { Dialog } from "primereact/dialog"
-import { Tag } from "primereact/tag"
-import { TabView, TabPanel } from "primereact/tabview"
 import type { DataTableExpandedRows } from "primereact/datatable"
 import { useCounterparties } from "@/lib/counterparty-context"
-import { FileText } from "lucide-react"
 
 const MOCK_USER_EMAIL = "admin@powersphere.com"
+const BORDER = "1px solid var(--surface-border)"
+const CTRL_H = "30px"
 
-// ── Types ────────────────────────────────────────────────────────
+const nativeInput: React.CSSProperties = {
+  height: CTRL_H, padding: "0 8px", fontSize: 12, border: BORDER, borderRadius: 6,
+  background: "var(--surface-card)", color: "var(--text-color)", outline: "none",
+  fontFamily: "inherit", boxSizing: "border-box", width: "100%",
+}
+const nativeSelect: React.CSSProperties = { ...nativeInput, cursor: "pointer" }
+const btnPrimary: React.CSSProperties = {
+  background: "#cc1111", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600,
+  padding: "0.35rem 0.875rem", color: "#fff", cursor: "pointer",
+  display: "inline-flex", alignItems: "center", gap: 6,
+}
+const btnSecondary: React.CSSProperties = {
+  background: "none", border: BORDER, borderRadius: 6, fontSize: 12, fontWeight: 600,
+  padding: "0.35rem 0.875rem", color: "var(--text-color)", cursor: "pointer",
+  display: "inline-flex", alignItems: "center", gap: 6,
+}
+const btnSuccess: React.CSSProperties = {
+  background: "#2d7a2d", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600,
+  padding: "0.35rem 0.875rem", color: "#fff", cursor: "pointer",
+  display: "inline-flex", alignItems: "center", gap: 6,
+}
+const btnDanger: React.CSSProperties = {
+  background: "none", border: "1px solid #dc2626", borderRadius: 6, fontSize: 12, fontWeight: 600,
+  padding: "0.35rem 0.875rem", color: "#dc2626", cursor: "pointer",
+  display: "inline-flex", alignItems: "center", gap: 6,
+}
+const thStyle: React.CSSProperties = {
+  fontSize: 11, fontWeight: 600, padding: "8px 12px",
+  background: "var(--surface-section)", color: "var(--text-color-secondary)",
+}
+const tdStyle: React.CSSProperties = { fontSize: 12, padding: "8px 12px" }
+
+// ── Types ────────────────────────────────────────────────────────────────────
 type UploadedDocument = { id: string; name: string; description: string; uploadedBy: string; lastModified: string }
-
 type Trade = {
   id: string; tradeName: string; tradeDate: string; tradeType: string; commodity: string
   qse: string; duns: string; portfolio: string; productType: string; strategy: string
@@ -27,16 +54,15 @@ type Trade = {
   documents?: UploadedDocument[]
 }
 
-// ── Dropdown options ─────────────────────────────────────────────
-const opts = (arr: string[]) => arr.map(v => ({ label: v, value: v }))
-const TRADE_TYPE_OPTIONS = opts(["Physical", "Financial", "Option", "Swap", "Forward"])
-const COMMODITY_OPTIONS = opts(["Power", "Natural Gas", "Crude Oil", "Coal", "Renewable Energy Credits"])
-const QSE_OPTIONS = opts(["QSE-001", "QSE-002", "QSE-003", "QSE-004", "QSE-005"])
-const PORTFOLIO_OPTIONS = opts(["Trading Book A", "Trading Book B", "Hedging Portfolio", "Speculation Portfolio"])
-const PRODUCT_TYPE_OPTIONS = opts(["Day Ahead", "Real Time", "Term", "Balancing"])
-const STRATEGY_OPTIONS = opts(["Arbitrage", "Hedging", "Speculation", "Market Making"])
-const BROKER_OPTIONS = opts(["Tradition", "ICAP", "BGC", "GFI", "Tullett Prebon"])
-const BROKERAGE_FEE_UOM_OPTIONS = opts(["$/MWh", "$/MMBtu", "Flat Fee", "% of Notional"])
+// ── Options ──────────────────────────────────────────────────────────────────
+const TRADE_TYPE_OPTIONS = ["Physical", "Financial", "Option", "Swap", "Forward"]
+const COMMODITY_OPTIONS = ["Power", "Natural Gas", "Crude Oil", "Coal", "Renewable Energy Credits"]
+const QSE_OPTIONS = ["QSE-001", "QSE-002", "QSE-003", "QSE-004", "QSE-005"]
+const PORTFOLIO_OPTIONS = ["Trading Book A", "Trading Book B", "Hedging Portfolio", "Speculation Portfolio"]
+const PRODUCT_TYPE_OPTIONS = ["Day Ahead", "Real Time", "Term", "Balancing"]
+const STRATEGY_OPTIONS = ["Arbitrage", "Hedging", "Speculation", "Market Making"]
+const BROKER_OPTIONS = ["Tradition", "ICAP", "BGC", "GFI", "Tullett Prebon"]
+const BROKERAGE_FEE_UOM_OPTIONS = ["$/MWh", "$/MMBtu", "Flat Fee", "% of Notional"]
 
 function generateTradeName(tradeDate: string, seq: number): string {
   const parts = tradeDate.split("-")
@@ -51,46 +77,661 @@ const initialTrades: Trade[] = [
   { id: "3", tradeName: "- - - - 03/24/2026 - 03/24/2026 - - - - 003", tradeDate: "2026-03-24", tradeType: "Swap", commodity: "Power", qse: "QSE-003", duns: "456789123", portfolio: "Trading Book B", productType: "Real Time", strategy: "Market Making", counterParty: "VISTRA", sleeveCounterparty: "", broker: "BGC", brokerageFee: "100", brokerageFeeUom: "Flat Fee", status: "Draft" },
 ]
 
-// ── Field wrapper ────────────────────────────────────────────────
+// ── Sub-components ───────────────────────────────────────────────────────────
+function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div style={{ position: "relative", paddingTop: 8, marginBottom: 20 }}>
+      <div style={{
+        position: "absolute", top: 0, left: 16, padding: "0 8px", zIndex: 1,
+        fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em",
+        background: "var(--surface-ground)", color: "#cc1111",
+      }}>{title}</div>
+      <div style={{
+        border: BORDER, borderRadius: 8, padding: 20, background: "var(--surface-card)",
+        display: "flex", flexDirection: "column", gap: 16,
+      }}>{children}</div>
+    </div>
+  )
+}
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-1">
-      <label className="text-xs font-medium" style={{ color: "var(--text-color-secondary)" }}>{label}</label>
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <label style={{ fontSize: 11, fontWeight: 500, color: "var(--text-color-secondary)" }}>{label}</label>
       {children}
     </div>
   )
 }
 
-// ── Section card ────────────────────────────────────────────────
-function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+function StatusPill({ status }: { status: Trade["status"] }) {
+  const map: Record<Trade["status"], { bg: string; color: string }> = {
+    "Approved":         { bg: "#dcfce7", color: "#166534" },
+    "Rejected":         { bg: "#fee2e2", color: "#991b1b" },
+    "Pending Approval": { bg: "#fef9c3", color: "#854d0e" },
+    "Draft":            { bg: "var(--surface-section)", color: "var(--text-color-secondary)" },
+  }
+  const s = map[status]
   return (
-    <div className="relative pt-4">
-      <div className="absolute -top-0 left-4 px-2 text-xs font-bold uppercase tracking-wider z-10"
-        style={{ background: "var(--surface-ground)", color: "#cc1111" }}>
-        {title}
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 5, padding: "2px 10px",
+      borderRadius: 20, fontSize: 11, fontWeight: 600, background: s.bg, color: s.color,
+    }}>
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: s.color }} />
+      {status}
+    </span>
+  )
+}
+
+// ── Reports mock data ─────────────────────────────────────────────────────────
+type ApprovalStatus = "pending" | "approved" | "rejected"
+type ReportContract = {
+  id: string; name: string; contractType: "Physical" | "Financial"
+  mwh: number; settlement: number; sleeveFee: number; total: number; fixedPlusSleeve: number; avgMarketPrice: number | null; floatingPrice: number | null
+  invoiceArrived: boolean; approvalStatus: ApprovalStatus; sapStatus: "pending" | "sent" | "failed"
+}
+type ReportGroup = { counterParty: string; contracts: ReportContract[] }
+
+const REPORT_DATA: ReportGroup[] = [
+  {
+    counterParty: "EDF",
+    contracts: [
+      { id: "e1", name: "174 Power - QSE - 2026-01-01-2026-12-31, 7x24, Real-Time",    contractType: "Physical",  mwh: 1440,   settlement: -75801.60,  sleeveFee: 0,      total: -75801.60,  fixedPlusSleeve: 52.64,  avgMarketPrice: null,  floatingPrice: null,    invoiceArrived: true,  approvalStatus: "approved", sapStatus: "sent"    },
+    ],
+  },
+  {
+    counterParty: "ENGIE",
+    contracts: [
+      { id: "n1", name: "997 Power - QSE - 2026-03-01-2026-04-30, 5x16, Real-Time",    contractType: "Financial", mwh: -1760,  settlement: 14031.78,   sleeveFee: -880,   total: 13151.78,   fixedPlusSleeve: 36.75,  avgMarketPrice: 28.28, floatingPrice: -8.47,   invoiceArrived: true,  approvalStatus: "approved", sapStatus: "sent"    },
+      { id: "n2", name: "996 Power - QSE - 2026-03-01-2026-04-30, 5x16, Real-Time",    contractType: "Financial", mwh: -1280,  settlement: 12086.85,   sleeveFee: -640,   total: 11446.85,   fixedPlusSleeve: 34.00,  avgMarketPrice: 24.06, floatingPrice: -9.94,   invoiceArrived: true,  approvalStatus: "pending",  sapStatus: "pending" },
+      { id: "n3", name: "731 Power - QSE - 2025-05-01-2026-04-30, 7x8, Day-Ahead",     contractType: "Financial", mwh: 300,    settlement: -13387.40,  sleeveFee: 0,      total: -13387.40,  fixedPlusSleeve: 145.00, avgMarketPrice: 40.02, floatingPrice: -102.98, invoiceArrived: true,  approvalStatus: "rejected", sapStatus: "pending" },
+      { id: "n4", name: "1001 Power - QSE - 2026-03-01-2026-04-30, 2x16, Real-Time",   contractType: "Financial", mwh: -640,   settlement: 6043.42,    sleeveFee: -320,   total: 5723.42,    fixedPlusSleeve: 34.00,  avgMarketPrice: 24.06, floatingPrice: -9.94,   invoiceArrived: true,  approvalStatus: "pending",  sapStatus: "pending" },
+      { id: "n5", name: "566 Power - QSE - 2026-01-01-2026-12-31, 7x24, Real-Time",    contractType: "Physical",  mwh: 2400,   settlement: -133152.00, sleeveFee: -600,   total: -133752.00, fixedPlusSleeve: 55.73,  avgMarketPrice: null,  floatingPrice: null,    invoiceArrived: false, approvalStatus: "pending",  sapStatus: "pending" },
+      { id: "n6", name: "960 Power - QSE - 2026-03-01-2026-04-30, 7x8, Real-Time",     contractType: "Financial", mwh: 3520,   settlement: -20143.56,  sleeveFee: -1760,  total: -21903.56,  fixedPlusSleeve: 34.00,  avgMarketPrice: 28.28, floatingPrice: -6.22,   invoiceArrived: true,  approvalStatus: "approved", sapStatus: "pending" },
+      { id: "n7", name: "995 Power - QSE - 2026-04-01-2026-03-31, 5x16, Real-Time",    contractType: "Financial", mwh: -1760,  settlement: 16231.78,   sleeveFee: -880,   total: 15351.78,   fixedPlusSleeve: 38.00,  avgMarketPrice: 28.28, floatingPrice: -9.72,   invoiceArrived: true,  approvalStatus: "pending",  sapStatus: "pending" },
+    ],
+  },
+  {
+    counterParty: "VISTRA",
+    contracts: [
+      { id: "v1", name: "203 Power - QSE - 2026-01-01-2026-12-31, 7x24, Real-Time",    contractType: "Physical",  mwh: 720,    settlement: -38400.00,  sleeveFee: 0,      total: -38400.00,  fixedPlusSleeve: 28.10,  avgMarketPrice: null,  floatingPrice: null,    invoiceArrived: true,  approvalStatus: "pending",  sapStatus: "pending" },
+    ],
+  },
+  {
+    counterParty: "SHELL",
+    contracts: [
+      { id: "s1", name: "441 Power - QSE - 2026-03-01-2026-04-30, 5x16, Real-Time",    contractType: "Financial", mwh: -880,   settlement: 7215.60,    sleeveFee: -440,   total: 6775.60,    fixedPlusSleeve: 18.50,  avgMarketPrice: 24.06, floatingPrice: -9.94,   invoiceArrived: true,  approvalStatus: "pending",  sapStatus: "pending" },
+    ],
+  },
+]
+
+const ALL_COUNTERPARTIES = REPORT_DATA.map(g => g.counterParty)
+
+type ColKey = "mwh" | "settlement" | "sleeveFee" | "total" | "fixedPlusSleeve" | "avgMarketPrice" | "floatingPrice" | "invoice" | "approval" | "sap"
+const SETTLEMENT_COLS: { key: ColKey; label: string; width: number; align: "right" | "center" | "left" }[] = [
+  { key: "mwh",             label: "MWh",                      width: 100, align: "right"  },
+  { key: "settlement",      label: "Settlement",               width: 120, align: "right"  },
+  { key: "sleeveFee",       label: "Sleeve Fee",               width: 110, align: "right"  },
+  { key: "total",           label: "Total",                    width: 120, align: "right"  },
+  { key: "fixedPlusSleeve", label: "Fixed Price + Sleeve Fee", width: 160, align: "right"  },
+  { key: "avgMarketPrice",  label: "Avg. Market Price",        width: 130, align: "right"  },
+  { key: "floatingPrice",   label: "Floating Price",           width: 120, align: "right"  },
+  { key: "invoice",         label: "Invoice",                  width: 60,  align: "center" },
+  { key: "approval",        label: "Approval",                 width: 60,  align: "center" },
+  { key: "sap",             label: "SAP",                      width: 60,  align: "center" },
+]
+
+function fmt(n: number): string {
+  const abs = Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return n < 0 ? `-$${abs}` : `$${abs}`
+}
+
+function MoneyCell({ value }: { value: number }) {
+  return (
+    <span style={{ color: value < 0 ? "#dc2626" : "var(--text-color)", fontSize: 12 }}>
+      {fmt(value)}
+    </span>
+  )
+}
+
+// ── Status icon cell ──────────────────────────────────────────────────────────
+function PendingDots() {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
+      {[0, 1, 2].map(i => (
+        <span key={i} style={{ width: 4, height: 4, borderRadius: "50%", background: "#9ca3af" }} />
+      ))}
+    </span>
+  )
+}
+
+function StatusIcon({ value, type }: { value: boolean | ApprovalStatus | "pending" | "sent" | "failed"; type: "arrived" | "approval" | "sap" }) {
+  if (type === "arrived") {
+    return value
+      ? <i className="pi pi-check" style={{ color: "#16a34a", fontSize: 13, fontWeight: 700 }} />
+      : <PendingDots />
+  }
+  if (type === "approval") {
+    if (value === "approved") return <i className="pi pi-check" style={{ color: "#16a34a", fontSize: 13, fontWeight: 700 }} />
+    if (value === "rejected") return <i className="pi pi-times" style={{ color: "#dc2626", fontSize: 13, fontWeight: 700 }} />
+    return <PendingDots />
+  }
+  // sap — read-only
+  if (value === "sent")   return <i className="pi pi-check" style={{ color: "#16a34a", fontSize: 13, fontWeight: 700 }} />
+  if (value === "failed") return <i className="pi pi-times" style={{ color: "#dc2626", fontSize: 13, fontWeight: 700 }} />
+  return <PendingDots />
+}
+
+// ── ETRM Reports ──────────────────────────────────────────────────────────────
+function ETRMReports() {
+  const [reportChip, setReportChip] = useState<"m2m" | "settlement" | "credit">("settlement")
+  const [month, setMonth] = useState(() => {
+    const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+  })
+  const [selectedCPs, setSelectedCPs] = useState<string[]>(ALL_COUNTERPARTIES)
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(REPORT_DATA.map(g => g.counterParty)))
+  const [tradeTypeFilter, setTradeTypeFilter] = useState<"All" | "Financial" | "Physical">("All")
+  const [collapsedSubgroups, setCollapsedSubgroups] = useState<Set<string>>(new Set())
+
+  const toggleSubgroup = (key: string) =>
+    setCollapsedSubgroups(prev => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  const [actionOpen, setActionOpen]   = useState(false)
+  const [colsOpen,   setColsOpen]     = useState(false)
+  const [rejectModal, setRejectModal] = useState(false)
+  const [rejectNote, setRejectNote]   = useState("")
+  const [rejectTargetId, setRejectTargetId] = useState<string | null>(null)
+  // contracts state (mutable for approve/reject)
+  const [contracts, setContracts] = useState<ReportContract[]>(() =>
+    REPORT_DATA.flatMap(g => g.contracts)
+  )
+  // selected contract IDs (individual level only)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  // visible columns
+  const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(
+    () => new Set(SETTLEMENT_COLS.map(c => c.key))
+  )
+  const actionRef = useRef<HTMLDivElement>(null)
+  const colsRef   = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (actionRef.current && !actionRef.current.contains(e.target as Node)) setActionOpen(false)
+      if (colsRef.current   && !colsRef.current.contains(e.target as Node))   setColsOpen(false)
+    }
+    document.addEventListener("mousedown", handleClick)
+    return () => document.removeEventListener("mousedown", handleClick)
+  }, [])
+
+  const reportChips = [
+    { key: "m2m" as const,        label: "Mark to Market(M2M)" },
+    { key: "settlement" as const, label: "Settlement Report" },
+    { key: "credit" as const,     label: "Credit & Collateral" },
+  ]
+
+  const toggleCP = (cp: string) =>
+    setSelectedCPs(prev => prev.includes(cp) ? prev.filter(x => x !== cp) : [...prev, cp])
+
+  // Derive group rows from mutable contracts state
+  const filteredGroups = useMemo(() =>
+    REPORT_DATA
+      .filter(g => selectedCPs.includes(g.counterParty))
+      .map(g => ({ ...g, contracts: contracts.filter(c => g.contracts.some(oc => oc.id === c.id)) })),
+    [selectedCPs, contracts]
+  )
+
+  const groupRows = filteredGroups.map(g => ({
+    counterParty: g.counterParty,
+    contracts: g.contracts,
+    mwh:             g.contracts.reduce((s, c) => s + c.mwh, 0),
+    settlement:      g.contracts.reduce((s, c) => s + c.settlement, 0),
+    sleeveFee:       g.contracts.reduce((s, c) => s + c.sleeveFee, 0),
+    total:           g.contracts.reduce((s, c) => s + c.total, 0),
+    fixedPlusSleeve: g.contracts.reduce((s, c) => s + c.fixedPlusSleeve, 0),
+  }))
+
+  // KPIs derived from contracts state
+  const kpiApproved = contracts.filter(c => c.approvalStatus === "approved").length
+  const kpiRejected = contracts.filter(c => c.approvalStatus === "rejected").length
+
+  // Selection helpers
+  const groupContractIds = (cp: string) =>
+    (REPORT_DATA.find(g => g.counterParty === cp)?.contracts ?? []).map(c => c.id)
+
+  const groupChecked = (cp: string): boolean | "indeterminate" => {
+    const ids = groupContractIds(cp)
+    const selCount = ids.filter(id => selectedIds.has(id)).length
+    if (selCount === 0) return false
+    if (selCount === ids.length) return true
+    return "indeterminate"
+  }
+
+  const toggleGroupSelection = (cp: string) => {
+    const ids = groupContractIds(cp)
+    const allSelected = ids.every(id => selectedIds.has(id))
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      ids.forEach(id => allSelected ? next.delete(id) : next.add(id))
+      return next
+    })
+  }
+
+  const toggleContractSelection = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  // Actions
+  const handleApproveSelected = () => {
+    setContracts(prev => prev.map(c => selectedIds.has(c.id) ? { ...c, approvalStatus: "approved" } : c))
+    setSelectedIds(new Set())
+    setActionOpen(false)
+  }
+
+  const handleRejectOpen = () => {
+    // Only one individual contract selected
+    if (selectedIds.size !== 1) return
+    setRejectTargetId([...selectedIds][0])
+    setRejectNote("")
+    setRejectModal(true)
+    setActionOpen(false)
+  }
+
+  const handleRejectConfirm = () => {
+    if (!rejectNote.trim() || !rejectTargetId) return
+    setContracts(prev => prev.map(c => c.id === rejectTargetId ? { ...c, approvalStatus: "rejected" } : c))
+    setSelectedIds(new Set())
+    setRejectModal(false)
+    setRejectTargetId(null)
+    setRejectNote("")
+  }
+
+  // Reject is only enabled when exactly 1 individual contract is selected
+  const canReject = selectedIds.size === 1
+
+  const toggleCol = (key: ColKey) =>
+    setVisibleCols(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
+
+  type GroupRow = typeof groupRows[0]
+  const renderGroupCell = (r: GroupRow, key: ColKey): React.ReactNode => {
+    switch (key) {
+      case "mwh":             return <div style={{ textAlign: "right" }}><span style={{ fontWeight: 700 }}>{r.mwh.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span></div>
+      case "settlement":      return <div style={{ textAlign: "right" }}><MoneyCell value={r.settlement} /></div>
+      case "sleeveFee":       return <div style={{ textAlign: "right" }}><MoneyCell value={r.sleeveFee} /></div>
+      case "total":           return <div style={{ textAlign: "right" }}><MoneyCell value={r.total} /></div>
+      case "fixedPlusSleeve": return <div style={{ textAlign: "right" }}><MoneyCell value={r.fixedPlusSleeve} /></div>
+      case "avgMarketPrice":  return <div style={{ textAlign: "right" }}><span style={{ color: "var(--text-color-secondary)" }}>—</span></div>
+      case "floatingPrice":   return <div style={{ textAlign: "right" }}><span style={{ color: "var(--text-color-secondary)" }}>—</span></div>
+      default:                return null
+    }
+  }
+
+  const renderContractCell = (c: ReportContract, key: ColKey): React.ReactNode => {
+    switch (key) {
+      case "mwh":             return <div style={{ textAlign: "right" }}>{c.mwh.toLocaleString("en-US", { minimumFractionDigits: 2 })}</div>
+      case "settlement":      return <div style={{ textAlign: "right" }}><MoneyCell value={c.settlement} /></div>
+      case "sleeveFee":       return <div style={{ textAlign: "right" }}><MoneyCell value={c.sleeveFee} /></div>
+      case "total":           return <div style={{ textAlign: "right" }}><MoneyCell value={c.total} /></div>
+      case "fixedPlusSleeve": return <div style={{ textAlign: "right" }}><MoneyCell value={c.fixedPlusSleeve} /></div>
+      case "avgMarketPrice":  return <div style={{ textAlign: "right" }}>
+        {c.avgMarketPrice != null ? <span style={{ fontSize: 12 }}>${c.avgMarketPrice.toFixed(2)}</span> : <span style={{ color: "var(--text-color-secondary)" }}>—</span>}
       </div>
-      <div className="rounded-lg border p-5 space-y-5"
-        style={{ borderColor: "var(--surface-border)", background: "var(--surface-card)" }}>
-        {children}
+      case "floatingPrice":   return <div style={{ textAlign: "right" }}>
+        {c.floatingPrice != null ? <MoneyCell value={c.floatingPrice} /> : <span style={{ fontSize: 12, color: "var(--text-color-secondary)" }}>—</span>}
       </div>
+      case "invoice":         return <div style={{ display: "flex", justifyContent: "center" }}><StatusIcon value={c.invoiceArrived} type="arrived" /></div>
+      case "approval":        return <div style={{ display: "flex", justifyContent: "center" }}><StatusIcon value={c.approvalStatus} type="approval" /></div>
+      case "sap":             return <div style={{ display: "flex", justifyContent: "center" }}><StatusIcon value={c.sapStatus} type="sap" /></div>
+      default:                return null
+    }
+  }
+
+  const visCols = SETTLEMENT_COLS.filter(c => visibleCols.has(c.key))
+  const toggleExpand = (cp: string) =>
+    setExpanded(prev => { const n = new Set(prev); n.has(cp) ? n.delete(cp) : n.add(cp); return n })
+
+  return (
+    <div>
+      {/* Reject modal */}
+      <Dialog
+        header="Reject Invoice"
+        visible={rejectModal}
+        onHide={() => setRejectModal(false)}
+        style={{ width: 440 }}
+        modal
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingTop: 8 }}>
+          <p style={{ fontSize: 12, color: "var(--text-color-secondary)", margin: 0 }}>
+            Please provide a reason for rejection. This is required before submitting.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label style={{ fontSize: 11, fontWeight: 500, color: "var(--text-color-secondary)" }}>Reason *</label>
+            <textarea
+              value={rejectNote}
+              onChange={e => setRejectNote(e.target.value)}
+              rows={4}
+              placeholder="Enter rejection reason..."
+              style={{
+                padding: 8, fontSize: 12, border: BORDER, borderRadius: 6,
+                background: "var(--surface-card)", color: "var(--text-color)",
+                outline: "none", fontFamily: "inherit", resize: "vertical", boxSizing: "border-box", width: "100%",
+              }}
+            />
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <button onClick={() => setRejectModal(false)} style={btnSecondary}>Cancel</button>
+            <button
+              onClick={handleRejectConfirm}
+              disabled={!rejectNote.trim()}
+              style={{ ...btnPrimary, opacity: rejectNote.trim() ? 1 : 0.45, cursor: rejectNote.trim() ? "pointer" : "not-allowed", background: "#dc2626" }}
+            >
+              <i className="pi pi-times" />Send
+            </button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* Report sub-chips */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 20 }}>
+        {reportChips.map(c => (
+          <button key={c.key} onClick={() => setReportChip(c.key)} style={{
+            padding: "4px 14px", borderRadius: 20, fontSize: 12, cursor: "pointer", border: BORDER,
+            background: reportChip === c.key ? "var(--surface-card)" : "transparent",
+            color: "var(--text-color)",
+            boxShadow: reportChip === c.key ? "0 1px 4px rgba(0,0,0,0.1)" : "none",
+            fontWeight: reportChip === c.key ? 600 : 400,
+          }}>{c.label}</button>
+        ))}
+      </div>
+
+      {(reportChip === "m2m" || reportChip === "credit") && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 160, fontSize: 13, color: "var(--text-color-secondary)" }}>
+          {reportChip === "m2m" ? "Mark to Market" : "Credit & Collateral"} — coming soon
+        </div>
+      )}
+
+      {reportChip === "settlement" && (
+        <>
+          {/* Toolbar */}
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 24, marginBottom: 16, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <label style={{ fontSize: 10, fontWeight: 500, color: "var(--text-color-secondary)" }}>Month</label>
+              <input type="month" value={month} onChange={e => setMonth(e.target.value)} style={{ ...nativeInput, width: 140 }} />
+            </div>
+            {/* Trade type toggle */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <label style={{ fontSize: 10, fontWeight: 500, color: "var(--text-color-secondary)" }}>Contract Type</label>
+              <div style={{ display: "flex", border: BORDER, borderRadius: 6, overflow: "hidden", height: CTRL_H }}>
+                {(["All", "Financial", "Physical"] as const).map(opt => (
+                  <button key={opt} onClick={() => setTradeTypeFilter(opt)} style={{
+                    padding: "0 12px", fontSize: 12, border: "none", cursor: "pointer",
+                    fontWeight: tradeTypeFilter === opt ? 600 : 400,
+                    background: tradeTypeFilter === opt ? "#cc1111" : "var(--surface-card)",
+                    color: tradeTypeFilter === opt ? "#fff" : "var(--text-color-secondary)",
+                    borderRight: opt !== "Physical" ? BORDER : "none",
+                  }}>{opt}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* Columns picker */}
+            <div ref={colsRef} style={{ position: "relative", display: "flex", flexDirection: "column", gap: 3 }}>
+              <label style={{ fontSize: 10, fontWeight: 500, color: "var(--text-color-secondary)" }}>Columns</label>
+              <button onClick={() => setColsOpen(o => !o)} style={{ ...btnSecondary, height: CTRL_H, padding: "0 12px", gap: 6 }}>
+                <i className="pi pi-table" style={{ fontSize: 11 }} />
+                <span style={{ fontSize: 11, fontWeight: 600 }}>{visibleCols.size}/{SETTLEMENT_COLS.length}</span>
+                <i className="pi pi-chevron-down" style={{ fontSize: 9 }} />
+              </button>
+              {colsOpen && (
+                <div style={{
+                  position: "absolute", left: 0, top: "calc(100% + 4px)", zIndex: 200,
+                  background: "var(--surface-card)", border: BORDER, borderRadius: 6,
+                  padding: "6px 0", minWidth: 210, boxShadow: "0 4px 12px rgba(0,0,0,0.14)",
+                }}>
+                  <div style={{ padding: "4px 14px 6px", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--text-color-secondary)", borderBottom: BORDER, marginBottom: 4 }}>
+                    Show / Hide Columns
+                  </div>
+                  {SETTLEMENT_COLS.map(col => (
+                    <label key={col.key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 14px", cursor: "pointer" }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "var(--surface-section)" }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "none" }}>
+                      <input type="checkbox" checked={visibleCols.has(col.key)} onChange={() => toggleCol(col.key)}
+                        style={{ cursor: "pointer", accentColor: "#cc1111", margin: 0 }} />
+                      <span style={{ fontSize: 12, color: "var(--text-color)" }}>{col.label}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <label style={{ fontSize: 10, fontWeight: 500, color: "var(--text-color-secondary)" }}>Counter Party</label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 5, maxWidth: 640 }}>
+                {ALL_COUNTERPARTIES.map(cp => {
+                  const active = selectedCPs.includes(cp)
+                  return (
+                    <button key={cp} onClick={() => toggleCP(cp)} style={{
+                      display: "inline-flex", alignItems: "center", gap: 5, padding: "2px 10px",
+                      borderRadius: 20, fontSize: 11, cursor: "pointer", border: BORDER,
+                      background: active ? "var(--surface-section)" : "transparent",
+                      color: active ? "var(--text-color)" : "var(--text-color-secondary)",
+                      fontWeight: active ? 500 : 400,
+                    }}>
+                      {cp}{active && <i className="pi pi-times" style={{ fontSize: 9, opacity: 0.6 }} />}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ borderTop: BORDER, marginBottom: 16 }} />
+
+          {/* KPI + actions row */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, marginBottom: 14 }}>
+            {/* KPI tiles */}
+            {[
+              { label: "Pending validation", value: kpiApproved, color: "#a35116" },
+              { label: "Approved",    value: kpiApproved, color: "#16a34a" },
+              { label: "Rejected",    value: kpiRejected,  color: "#dc2626" },
+            ].map(kpi => (
+              <div key={kpi.label} style={{
+                display: "flex", flexDirection: "column", alignItems: "center",
+                padding: "4px 14px", border: BORDER, borderRadius: 6, background: "var(--surface-card)", minWidth: 90,
+              }}>
+                <span style={{ fontSize: 10, color: "var(--text-color-secondary)", whiteSpace: "nowrap" }}>{kpi.label}</span>
+                <span style={{ fontSize: 18, fontWeight: 700, color: kpi.color, lineHeight: 1.2 }}>{kpi.value}</span>
+              </div>
+            ))}
+
+            {/* Download Selected */}
+            <button style={{ ...btnPrimary, height: CTRL_H, padding: "0 14px" }}>
+              <i />Invoice validation
+            </button>
+
+            {/* SELECT ACTION */}
+            <div ref={actionRef} style={{ position: "relative" }}>
+              <div style={{ display: "flex", border: "1px solid #cc1111", borderRadius: 6, overflow: "hidden" }}>
+                <button onClick={() => setActionOpen(o => !o)} style={{
+                  background: "none", border: "none", height: CTRL_H, padding: "0 12px",
+                  fontSize: 11, fontWeight: 700, color: "#cc1111", cursor: "pointer", letterSpacing: "0.05em",
+                }}>SELECT ACTION</button>
+                <button onClick={() => setActionOpen(o => !o)} style={{
+                  background: "none", border: "none", borderLeft: "1px solid #cc1111",
+                  height: CTRL_H, padding: "0 8px", cursor: "pointer", display: "flex", alignItems: "center", color: "#cc1111",
+                }}>
+                  <i className="pi pi-chevron-down" style={{ fontSize: 10 }} />
+                </button>
+              </div>
+              {actionOpen && (
+                <div style={{
+                  position: "absolute", right: 0, top: "calc(100% + 4px)", zIndex: 100,
+                  background: "var(--surface-card)", border: BORDER, borderRadius: 6,
+                  minWidth: 180, boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
+                }}>
+                  {[
+                    { label: "Check for invoices", action: () => setActionOpen(false), disabled: false },
+                    { label: "Approve",             action: handleApproveSelected,      disabled: selectedIds.size === 0 },
+                    { label: "Reject",              action: handleRejectOpen,           disabled: !canReject },
+                  ].map(({ label, action, disabled }) => (
+                    <button key={label} onClick={action} disabled={disabled} style={{
+                      display: "block", width: "100%", textAlign: "left", background: "none",
+                      border: "none", padding: "8px 14px", fontSize: 12,
+                      cursor: disabled ? "not-allowed" : "pointer",
+                      color: disabled ? "var(--text-color-secondary)" : "var(--text-color)",
+                      opacity: disabled ? 0.5 : 1,
+                    }}
+                      onMouseEnter={e => { if (!disabled) e.currentTarget.style.background = "var(--surface-section)" }}
+                      onMouseLeave={e => { e.currentTarget.style.background = "none" }}
+                    >{label}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Settlement table — single unified table so all rows share one colgroup */}
+          <table style={{ width: "100%", borderCollapse: "collapse", borderSpacing: 0 }}>
+            <colgroup>
+              <col style={{ width: "3rem" }} />
+              <col style={{ width: "3rem" }} />
+              <col />
+              {visCols.map(col => <col key={col.key} style={{ width: col.width }} />)}
+            </colgroup>
+            <thead>
+              <tr>
+                <th style={thStyle} />
+                <th style={thStyle} />
+                <th style={{ ...thStyle, textAlign: "left" }}>Counter Party</th>
+                {visCols.map(col => (
+                  <th key={col.key} style={{ ...thStyle, textAlign: col.align }}>
+                    {col.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {groupRows.length === 0 && (
+                <tr><td colSpan={3 + visCols.length} style={{ ...tdStyle, textAlign: "center", color: "var(--text-color-secondary)", padding: 24 }}>
+                  No data for selected counterparties.
+                </td></tr>
+              )}
+              {groupRows.map(group => {
+                const isExp  = expanded.has(group.counterParty)
+                const checked = groupChecked(group.counterParty)
+                const showFin = tradeTypeFilter === "All" || tradeTypeFilter === "Financial"
+                const showPhy = tradeTypeFilter === "All" || tradeTypeFilter === "Physical"
+                const financial = group.contracts.filter(c => c.contractType === "Financial")
+                const physical  = group.contracts.filter(c => c.contractType === "Physical")
+                const finKey = `${group.counterParty}-financial`
+                const phyKey = `${group.counterParty}-physical`
+                const finCollapsed = collapsedSubgroups.has(finKey)
+                const phyCollapsed = collapsedSubgroups.has(phyKey)
+                const grpTd: React.CSSProperties = { ...tdStyle, fontWeight: 700, borderBottom: BORDER }
+                const sgTd:  React.CSSProperties = { padding: "4px 12px", background: "var(--surface-section)" }
+                const cTdBase: React.CSSProperties = { padding: "6px 12px", fontSize: 12, fontWeight: 400, borderBottom: BORDER }
+
+                const contractRows = (list: ReportContract[], badgeBg: string, badgeColor: string, badgeLabel: string) =>
+                  list.map(c => {
+                    const sel = selectedIds.has(c.id)
+                    const cTd: React.CSSProperties = { ...cTdBase, background: sel ? "rgba(204,17,17,0.04)" : "var(--surface-card)" }
+                    return (
+                      <tr key={c.id} onClick={() => toggleContractSelection(c.id)} style={{ cursor: "pointer" }}>
+                        <td style={{ ...cTd, borderLeft: sel ? "2px solid rgba(204,17,17,0.4)" : "2px solid transparent" }}>
+                          <input type="checkbox" checked={sel} onChange={() => toggleContractSelection(c.id)}
+                            onClick={e => e.stopPropagation()} style={{ cursor: "pointer", accentColor: "#cc1111", margin: 0 }} />
+                        </td>
+                        <td style={cTd} />
+                        <td style={{ ...cTd, maxWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}>
+                            <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 600, padding: "1px 6px", borderRadius: 4, background: badgeBg, color: badgeColor }}>{badgeLabel}</span>
+                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 11, fontFamily: "monospace", color: "var(--text-color-secondary)" }}>{c.name}</span>
+                          </div>
+                        </td>
+                        {visCols.map(col => <td key={col.key} style={cTd}>{renderContractCell(c, col.key)}</td>)}
+                      </tr>
+                    )
+                  })
+
+                const subgroupHeader = (key: string, label: string, count: number, collapsed: boolean) => (
+                  <tr key={`sg-${key}`}>
+                    <td style={sgTd} />
+                    <td style={{ ...sgTd, paddingLeft: 8 }}>
+                      <button onClick={() => toggleSubgroup(key)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "inline-flex", alignItems: "center" }}>
+                        <i className={`pi pi-chevron-${collapsed ? "right" : "down"}`} style={{ fontSize: 9, color: "var(--text-color-secondary)" }} />
+                      </button>
+                    </td>
+                    <td colSpan={1 + visCols.length} style={sgTd}>
+                      <button onClick={() => toggleSubgroup(key)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--text-color-secondary)" }}>
+                          {label} <span style={{ fontWeight: 400 }}>({count})</span>
+                        </span>
+                      </button>
+                    </td>
+                  </tr>
+                )
+
+                return (
+                  <React.Fragment key={group.counterParty}>
+                    {/* Group row */}
+                    <tr style={{ background: "var(--surface-card)" }}>
+                      <td style={grpTd}>
+                        <input type="checkbox"
+                          ref={el => { if (el) el.indeterminate = checked === "indeterminate" }}
+                          checked={checked === true}
+                          onChange={() => toggleGroupSelection(group.counterParty)}
+                          style={{ cursor: "pointer", accentColor: "#cc1111" }} />
+                      </td>
+                      <td style={grpTd}>
+                        <button onClick={() => toggleExpand(group.counterParty)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "inline-flex", alignItems: "center" }}>
+                          <i className={`pi pi-chevron-${isExp ? "down" : "right"}`} style={{ fontSize: 10, color: "var(--text-color-secondary)" }} />
+                        </button>
+                      </td>
+                      <td style={grpTd}><span style={{ fontWeight: 700, fontSize: 13 }}>{group.counterParty}</span></td>
+                      {visCols.map(col => <td key={col.key} style={grpTd}>{renderGroupCell(group, col.key)}</td>)}
+                    </tr>
+                    {/* Expansion */}
+                    {isExp && <>
+                      {showFin && financial.length > 0 && <>
+                        {subgroupHeader(finKey, "Financial", financial.length, finCollapsed)}
+                        {!finCollapsed && contractRows(financial, "rgba(124,58,237,0.1)", "#6d28d9", "Financial")}
+                      </>}
+                      {showFin && showPhy && financial.length > 0 && physical.length > 0 && (
+                        <tr><td colSpan={3 + visCols.length} style={{ height: 6, background: "var(--surface-section)" }} /></tr>
+                      )}
+                      {showPhy && physical.length > 0 && <>
+                        {subgroupHeader(phyKey, "Physical", physical.length, phyCollapsed)}
+                        {!phyCollapsed && contractRows(physical, "rgba(37,99,235,0.1)", "#1d4ed8", "Physical")}
+                      </>}
+                    </>}
+                  </React.Fragment>
+                )
+              })}
+            </tbody>
+          </table>
+        </>
+      )}
     </div>
   )
 }
 
-// ── Status tag ───────────────────────────────────────────────────
-function statusSeverity(s: Trade["status"]) {
-  if (s === "Approved") return "success" as const
-  if (s === "Rejected") return "danger" as const
-  if (s === "Pending Approval") return "warning" as const
-  return "secondary" as const
-}
-
-// ── Main page ────────────────────────────────────────────────────
+// ── Page ─────────────────────────────────────────────────────────────────────
 export default function ETRMPage() {
   const { activeCounterparties } = useCounterparties()
-  const counterpartyOptions = useMemo(() => activeCounterparties.map(cp => ({ label: cp.counterparty, value: cp.counterparty })), [activeCounterparties])
+  const counterpartyList = useMemo(() => {
+    const list = activeCounterparties.map(c => c.counterparty).filter(Boolean)
+    return list.length ? list : ["EDF", "ENGIE", "Vistra", "Axpo", "Shell"]
+  }, [activeCounterparties])
 
-  // Trade form state
+  const [mainTab, setMainTab] = useState<"reports" | "st">("st")
+  const [subChip, setSubChip] = useState<"trades" | "deal-entry" | "approvals" | "upload">("deal-entry")
+
+  // Form state
   const [tradeDate, setTradeDate] = useState(() => new Date().toISOString().split("T")[0])
   const [tradeType, setTradeType] = useState("")
   const [commodity, setCommodity] = useState("")
@@ -115,17 +756,10 @@ export default function ETRMPage() {
 
   const tradeName = useMemo(() => generateTradeName(tradeDate, trades.length + 1), [tradeDate, trades.length])
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (!files?.length) return
-    const newDoc: UploadedDocument = {
-      id: Date.now().toString(), name: files[0].name, description: newDocDescription,
-      uploadedBy: MOCK_USER_EMAIL,
-      lastModified: new Date().toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }),
-    }
-    setUploadedDocuments(prev => [...prev, newDoc])
-    setNewDocDescription("")
-    if (fileInputRef.current) fileInputRef.current.value = ""
+  const clearForm = () => {
+    setTradeType(""); setCommodity(""); setQse(""); setDuns(""); setPortfolio("")
+    setProductType(""); setStrategy(""); setCounterParty(""); setSleeveCounterparty("")
+    setBroker(""); setBrokerageFee(""); setBrokerageFeeUom("")
   }
 
   const handleSaveTrade = () => {
@@ -134,222 +768,286 @@ export default function ETRMPage() {
       portfolio, productType, strategy, counterParty, sleeveCounterparty, broker,
       brokerageFee, brokerageFeeUom, status: "Draft", documents: uploadedDocuments,
     }])
-    setTradeType(""); setCommodity(""); setQse(""); setDuns(""); setPortfolio("")
-    setProductType(""); setStrategy(""); setCounterParty(""); setSleeveCounterparty("")
-    setBroker(""); setBrokerageFee(""); setBrokerageFeeUom(""); setUploadedDocuments([])
+    clearForm(); setUploadedDocuments([])
   }
 
-  const handleApprove = (id: string) => {
-    setTrades(prev => prev.map(t => t.id === id ? { ...t, status: "Approved" } : t))
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files?.length) return
+    setUploadedDocuments(prev => [...prev, {
+      id: Date.now().toString(), name: files[0].name, description: newDocDescription,
+      uploadedBy: MOCK_USER_EMAIL,
+      lastModified: new Date().toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }),
+    }])
+    setNewDocDescription("")
+    if (fileInputRef.current) fileInputRef.current.value = ""
   }
-  const handleReject = (id: string) => {
-    setTrades(prev => prev.map(t => t.id === id ? { ...t, status: "Rejected" } : t))
-  }
 
-  // ── Deal Entry form ──────────────────────────────────────────
-  const dealEntryForm = (
-    <div className="space-y-6">
-      <SectionCard title="General">
-        <div className="grid grid-cols-3 gap-5">
-          <Field label="Trade Name">
-            <InputText value={tradeName} disabled className="w-full font-mono text-xs" />
-          </Field>
-          <Field label="Trade Type">
-            <Dropdown value={tradeType} options={TRADE_TYPE_OPTIONS} onChange={e => setTradeType(e.value)} placeholder="Select type" className="w-full" />
-          </Field>
-          <Field label="Commodity">
-            <Dropdown value={commodity} options={COMMODITY_OPTIONS} onChange={e => setCommodity(e.value)} placeholder="Select commodity" className="w-full" />
-          </Field>
-        </div>
-        <div className="grid grid-cols-3 gap-5">
-          <Field label="Trade Date">
-            <InputText type="date" value={tradeDate} onChange={e => setTradeDate(e.target.value)} className="w-full" />
-          </Field>
-          <Field label="QSE">
-            <Dropdown value={qse} options={QSE_OPTIONS} onChange={e => setQse(e.value)} placeholder="Select QSE" className="w-full" />
-          </Field>
-          <Field label="DUNS">
-            <InputText value={duns} onChange={e => setDuns(e.target.value)} className="w-full" placeholder="DUNS number" />
-          </Field>
-        </div>
-      </SectionCard>
-
-      <SectionCard title="Classification">
-        <div className="grid grid-cols-3 gap-5">
-          <Field label="Portfolio">
-            <Dropdown value={portfolio} options={PORTFOLIO_OPTIONS} onChange={e => setPortfolio(e.value)} placeholder="Select portfolio" className="w-full" />
-          </Field>
-          <Field label="Product Type">
-            <Dropdown value={productType} options={PRODUCT_TYPE_OPTIONS} onChange={e => setProductType(e.value)} placeholder="Select product type" className="w-full" />
-          </Field>
-          <Field label="Strategy">
-            <Dropdown value={strategy} options={STRATEGY_OPTIONS} onChange={e => setStrategy(e.value)} placeholder="Select strategy" className="w-full" />
-          </Field>
-        </div>
-        <div className="grid grid-cols-3 gap-5">
-          <Field label="Counter Party">
-            <Dropdown value={counterParty} options={counterpartyOptions.length ? counterpartyOptions : opts(["EDF","ENGIE","Vistra","Axpo","Shell"])} onChange={e => setCounterParty(e.value)} placeholder="Select counterparty" className="w-full" />
-          </Field>
-          <Field label="Sleeve Counterparty">
-            <Dropdown value={sleeveCounterparty} options={counterpartyOptions.length ? counterpartyOptions : opts(["EDF","ENGIE","Vistra","Axpo","Shell"])} onChange={e => setSleeveCounterparty(e.value)} placeholder="Optional" className="w-full" showClear />
-          </Field>
-          <Field label="Broker">
-            <Dropdown value={broker} options={BROKER_OPTIONS} onChange={e => setBroker(e.value)} placeholder="Select broker" className="w-full" />
-          </Field>
-        </div>
-        <div className="grid grid-cols-3 gap-5">
-          <Field label="Brokerage Fee">
-            <InputText value={brokerageFee} onChange={e => setBrokerageFee(e.target.value)} className="w-full" placeholder="0.00" />
-          </Field>
-          <Field label="Brokerage Fee UoM">
-            <Dropdown value={brokerageFeeUom} options={BROKERAGE_FEE_UOM_OPTIONS} onChange={e => setBrokerageFeeUom(e.value)} placeholder="Select UoM" className="w-full" />
-          </Field>
-        </div>
-      </SectionCard>
-
-      <div className="flex justify-end gap-2">
-        <Button label="Clear" outlined onClick={() => { setTradeType(""); setCommodity(""); setQse(""); setDuns(""); setPortfolio(""); setProductType(""); setStrategy(""); setCounterParty(""); setSleeveCounterparty(""); setBroker(""); setBrokerageFee(""); setBrokerageFeeUom("") }} />
-        <Button label="Save Trade" icon="pi pi-save" onClick={handleSaveTrade} />
-      </div>
-    </div>
-  )
-
-  // ── Trades table ─────────────────────────────────────────────
-  const statusBody = (t: Trade) => <Tag value={t.status} severity={statusSeverity(t.status)} />
-
-  const tradeActionsBody = (t: Trade) => (
-    <div className="flex gap-1">
-      <Button icon="pi pi-pencil" rounded text size="small" tooltip="Edit" />
-      <Button icon="pi pi-trash" rounded text severity="danger" size="small" tooltip="Delete"
-        onClick={() => setTrades(prev => prev.filter(x => x.id !== t.id))} />
-    </div>
-  )
-
-  const tradeExpansionTemplate = (t: Trade) => (
-    <div className="p-4 grid grid-cols-4 gap-4" style={{ background: "var(--surface-section)" }}>
-      {[["QSE", t.qse], ["DUNS", t.duns], ["Portfolio", t.portfolio], ["Product Type", t.productType],
-        ["Strategy", t.strategy], ["Sleeve Counterparty", t.sleeveCounterparty || "—"],
-        ["Broker", t.broker], ["Brokerage Fee", `${t.brokerageFee} ${t.brokerageFeeUom}`]].map(([label, val]) => (
-        <div key={label}>
-          <p className="text-xs" style={{ color: "var(--text-color-secondary)" }}>{label}</p>
-          <p className="text-sm font-medium" style={{ color: "var(--text-color)" }}>{val}</p>
-        </div>
-      ))}
-    </div>
-  )
-
-  const tradesTable = (
-    <DataTable
-      value={trades}
-      dataKey="id"
-      expandedRows={expandedTradeRows}
-      onRowToggle={e => setExpandedTradeRows(e.data as DataTableExpandedRows)}
-      rowExpansionTemplate={tradeExpansionTemplate}
-      stripedRows size="small"
-      emptyMessage="No trades yet. Use Deal Entry to create one."
-    >
-      <Column expander style={{ width: "3rem" }} />
-      <Column field="tradeName" header="Trade Name" style={{ fontFamily: "monospace", fontSize: "0.7rem", minWidth: "280px" }} />
-      <Column field="tradeDate" header="Trade Date" sortable style={{ width: "120px" }} />
-      <Column field="counterParty" header="Counter Party" sortable style={{ width: "120px" }} />
-      <Column field="commodity" header="Commodity" sortable style={{ width: "120px" }} />
-      <Column field="tradeType" header="Type" sortable style={{ width: "100px" }} />
-      <Column header="Status" body={statusBody} sortable sortField="status" style={{ width: "140px" }} />
-      <Column header="Actions" body={tradeActionsBody} style={{ width: "100px" }} />
-    </DataTable>
-  )
-
-  // ── Approvals table ─────────────────────────────────────────
   const pendingTrades = trades.filter(t => t.status === "Pending Approval")
 
-  const approvalActionsBody = (t: Trade) => (
-    <div className="flex gap-2">
-      <Button label="Approve" size="small" icon="pi pi-check"
-        style={{ background: "#2d7a2d", borderColor: "#2d7a2d" }}
-        onClick={() => handleApprove(t.id)} />
-      <Button label="Reject" size="small" severity="danger" outlined
-        onClick={() => handleReject(t.id)} />
-    </div>
-  )
-
-  const approvalsTable = (
-    <DataTable value={pendingTrades} size="small" stripedRows
-      emptyMessage="No trades pending approval.">
-      <Column field="tradeName" header="Trade Name" style={{ fontFamily: "monospace", fontSize: "0.7rem", minWidth: "280px" }} />
-      <Column field="tradeDate" header="Trade Date" style={{ width: "120px" }} />
-      <Column field="counterParty" header="Counter Party" style={{ width: "120px" }} />
-      <Column field="commodity" header="Commodity" style={{ width: "120px" }} />
-      <Column field="tradeType" header="Type" style={{ width: "100px" }} />
-      <Column header="Actions" body={approvalActionsBody} style={{ width: "200px" }} />
-    </DataTable>
-  )
-
-  // ── Upload Files section ─────────────────────────────────────
-  const uploadSection = (
-    <div className="space-y-4">
-      <Dialog header="Upload Document" visible={uploadModalOpen} onHide={() => setUploadModalOpen(false)} style={{ width: "480px" }} modal>
-        <div className="space-y-4 pt-2">
-          <Field label="Description (optional)">
-            <InputText value={newDocDescription} onChange={e => setNewDocDescription(e.target.value)} className="w-full" placeholder="Enter description" />
-          </Field>
-          <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelect} />
-          <Button label="Select File" icon="pi pi-folder-open" outlined onClick={() => fileInputRef.current?.click()} />
-        </div>
-      </Dialog>
-
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold" style={{ color: "var(--text-color)" }}>Document Repository</h3>
-        <Button label="Upload Files" icon="pi pi-upload" outlined size="small" onClick={() => setUploadModalOpen(true)} />
-      </div>
-
-      <DataTable value={uploadedDocuments} size="small" stripedRows
-        emptyMessage="No documents uploaded yet.">
-        <Column header="Document" body={(d: UploadedDocument) => (
-          <div className="flex items-center gap-2">
-            <FileText className="h-3.5 w-3.5" style={{ color: "#cc1111" }} />
-            <span className="text-sm">{d.name}</span>
-          </div>
-        )} />
-        <Column field="description" header="Description" />
-        <Column field="uploadedBy" header="Uploaded By" />
-        <Column field="lastModified" header="Last Modified" />
-        <Column header="" body={(d: UploadedDocument) => (
-          <Button icon="pi pi-times" rounded text severity="danger" size="small"
-            onClick={() => setUploadedDocuments(prev => prev.filter(x => x.id !== d.id))} />
-        )} style={{ width: "50px" }} />
-      </DataTable>
-    </div>
-  )
+  const mainTabs = [
+    { key: "reports" as const, label: "Reports" },
+    { key: "st" as const,      label: "Standard Trade (ST)" },
+  ]
+  const subChips = [
+    { key: "trades" as const,     label: "Trades" },
+    { key: "deal-entry" as const, label: "Deal Entry" },
+    { key: "approvals" as const,  label: "Approvals" },
+    { key: "upload" as const,     label: "Upload Files" },
+  ]
 
   return (
     <DashboardLayout pageTitle="ETRM">
-      <TabView>
-        <TabPanel header="Reports">
-          <div className="flex items-center justify-center h-40 text-sm" style={{ color: "var(--text-color-secondary)" }}>
-            Reports — coming soon
-          </div>
-        </TabPanel>
+      {/* Main tab bar */}
+      <div style={{ display: "flex", borderBottom: BORDER, marginBottom: 20 }}>
+        {mainTabs.map(t => (
+          <button key={t.key} onClick={() => setMainTab(t.key)} style={{
+            background: "none", border: "none", cursor: "pointer", padding: "10px 20px",
+            fontSize: 13, fontWeight: mainTab === t.key ? 600 : 400,
+            color: mainTab === t.key ? "var(--text-color)" : "var(--text-color-secondary)",
+            borderBottom: mainTab === t.key ? "2px solid #cc1111" : "2px solid transparent",
+            marginBottom: -1,
+          }}>{t.label}</button>
+        ))}
+      </div>
 
-        <TabPanel header="Standard Trade (ST)">
-          <TabView>
-            <TabPanel header="Deal Entry">
-              {dealEntryForm}
-            </TabPanel>
-            <TabPanel header="Trades">
-              {tradesTable}
-            </TabPanel>
-            <TabPanel header="Approvals">
-              <div className="flex items-center gap-3 mb-4">
-                <Tag value={`${pendingTrades.length} Pending`} severity="warning" />
+      {mainTab === "reports" && <ETRMReports />}
+
+      {mainTab === "st" && (
+        <>
+          {/* Sub chips */}
+          <div style={{ display: "flex", gap: 6, marginBottom: 20 }}>
+            {subChips.map(c => (
+              <button key={c.key} onClick={() => setSubChip(c.key)} style={{
+                padding: "4px 14px", borderRadius: 20, fontSize: 12, cursor: "pointer", border: BORDER,
+                background: subChip === c.key ? "var(--surface-card)" : "transparent",
+                color: "var(--text-color)",
+                boxShadow: subChip === c.key ? "0 1px 4px rgba(0,0,0,0.1)" : "none",
+                fontWeight: subChip === c.key ? 600 : 400,
+              }}>{c.label}</button>
+            ))}
+          </div>
+
+          {/* Deal Entry */}
+          {subChip === "deal-entry" && (
+            <div>
+              <SectionCard title="General">
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+                  <Field label="Trade Name">
+                    <input value={tradeName} readOnly style={{ ...nativeInput, fontFamily: "monospace", opacity: 0.7 }} />
+                  </Field>
+                  <Field label="Trade Type">
+                    <select value={tradeType} onChange={e => setTradeType(e.target.value)} style={nativeSelect}>
+                      <option value="">Trade Type</option>
+                      {TRADE_TYPE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Commodity">
+                    <select value={commodity} onChange={e => setCommodity(e.target.value)} style={nativeSelect}>
+                      <option value="">Commodity</option>
+                      {COMMODITY_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </Field>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+                  <Field label="Trade Date">
+                    <input type="date" value={tradeDate} onChange={e => setTradeDate(e.target.value)} style={nativeInput} />
+                  </Field>
+                  <Field label="QSE">
+                    <select value={qse} onChange={e => setQse(e.target.value)} style={nativeSelect}>
+                      <option value="">QSE</option>
+                      {QSE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="DUNS">
+                    <input value={duns} onChange={e => setDuns(e.target.value)} style={nativeInput} placeholder="DUNS number" />
+                  </Field>
+                </div>
+              </SectionCard>
+
+              <SectionCard title="Classification">
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+                  <Field label="Portfolio">
+                    <select value={portfolio} onChange={e => setPortfolio(e.target.value)} style={nativeSelect}>
+                      <option value="">Portfolio</option>
+                      {PORTFOLIO_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Product Type">
+                    <select value={productType} onChange={e => setProductType(e.target.value)} style={nativeSelect}>
+                      <option value="">Product Type</option>
+                      {PRODUCT_TYPE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Strategy">
+                    <select value={strategy} onChange={e => setStrategy(e.target.value)} style={nativeSelect}>
+                      <option value="">Strategy</option>
+                      {STRATEGY_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </Field>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+                  <Field label="Counter Party">
+                    <select value={counterParty} onChange={e => setCounterParty(e.target.value)} style={nativeSelect}>
+                      <option value="">Counter Party</option>
+                      {counterpartyList.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Sleeve Counterparty">
+                    <select value={sleeveCounterparty} onChange={e => setSleeveCounterparty(e.target.value)} style={nativeSelect}>
+                      <option value="">Sleeve Counterparty</option>
+                      {counterpartyList.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Broker">
+                    <select value={broker} onChange={e => setBroker(e.target.value)} style={nativeSelect}>
+                      <option value="">Broker</option>
+                      {BROKER_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </Field>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+                  <Field label="Brokerage Fee">
+                    <input value={brokerageFee} onChange={e => setBrokerageFee(e.target.value)} style={nativeInput} placeholder="0.00" />
+                  </Field>
+                  <Field label="Brokerage Fee (UoM)">
+                    <select value={brokerageFeeUom} onChange={e => setBrokerageFeeUom(e.target.value)} style={nativeSelect}>
+                      <option value="">Brokerage Fee (UoM)</option>
+                      {BROKERAGE_FEE_UOM_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </Field>
+                </div>
+              </SectionCard>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
+                <button onClick={clearForm} style={btnSecondary}>Clear</button>
+                <button onClick={handleSaveTrade} style={btnPrimary}>
+                  <i className="pi pi-save" />Save Trade
+                </button>
               </div>
-              {approvalsTable}
-            </TabPanel>
-            <TabPanel header="Upload Files">
-              {uploadSection}
-            </TabPanel>
-          </TabView>
-        </TabPanel>
-      </TabView>
+            </div>
+          )}
+
+          {/* Trades */}
+          {subChip === "trades" && (
+            <DataTable
+              value={trades} dataKey="id"
+              expandedRows={expandedTradeRows}
+              onRowToggle={e => setExpandedTradeRows(e.data as DataTableExpandedRows)}
+              rowExpansionTemplate={(t: Trade) => (
+                <div style={{ padding: 16, display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, background: "var(--surface-section)" }}>
+                  {([["QSE", t.qse], ["DUNS", t.duns], ["Portfolio", t.portfolio], ["Product Type", t.productType],
+                    ["Strategy", t.strategy], ["Sleeve Counterparty", t.sleeveCounterparty || "—"],
+                    ["Broker", t.broker], ["Brokerage Fee", `${t.brokerageFee} ${t.brokerageFeeUom}`]] as [string, string][]).map(([label, val]) => (
+                    <div key={label}>
+                      <p style={{ fontSize: 11, color: "var(--text-color-secondary)", margin: "0 0 2px" }}>{label}</p>
+                      <p style={{ fontSize: 12, fontWeight: 500, color: "var(--text-color)", margin: 0 }}>{val}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              stripedRows size="small"
+              emptyMessage="No trades yet. Use Deal Entry to create one."
+              pt={{ column: { headerCell: { style: thStyle }, bodyCell: { style: tdStyle } } }}
+            >
+              <Column expander style={{ width: "3rem" }} />
+              <Column field="tradeName" header="Trade Name" style={{ fontFamily: "monospace", fontSize: "0.7rem", minWidth: 280 }} />
+              <Column field="tradeDate" header="Trade Date" sortable style={{ width: 120 }} />
+              <Column field="counterParty" header="Counter Party" sortable style={{ width: 130 }} />
+              <Column field="commodity" header="Commodity" sortable style={{ width: 130 }} />
+              <Column field="tradeType" header="Type" sortable style={{ width: 100 }} />
+              <Column header="Status" body={(t: Trade) => <StatusPill status={t.status} />} style={{ width: 170 }} />
+              <Column header="" body={(t: Trade) => (
+                <div style={{ display: "flex", gap: 4 }}>
+                  <button title="Edit" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-color-secondary)", fontSize: 13, padding: 4 }}>
+                    <i className="pi pi-pencil" />
+                  </button>
+                  <button title="Delete" onClick={() => setTrades(prev => prev.filter(x => x.id !== t.id))}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "#dc2626", fontSize: 13, padding: 4 }}>
+                    <i className="pi pi-trash" />
+                  </button>
+                </div>
+              )} style={{ width: 80 }} />
+            </DataTable>
+          )}
+
+          {/* Approvals */}
+          {subChip === "approvals" && (
+            <div>
+              <div style={{ marginBottom: 12 }}>
+                <StatusPill status="Pending Approval" />
+                <span style={{ fontSize: 12, marginLeft: 8, color: "var(--text-color-secondary)" }}>{pendingTrades.length} pending</span>
+              </div>
+              <DataTable value={pendingTrades} size="small" stripedRows
+                emptyMessage="No trades pending approval."
+                pt={{ column: { headerCell: { style: thStyle }, bodyCell: { style: tdStyle } } }}
+              >
+                <Column field="tradeName" header="Trade Name" style={{ fontFamily: "monospace", fontSize: "0.7rem", minWidth: 280 }} />
+                <Column field="tradeDate" header="Trade Date" style={{ width: 120 }} />
+                <Column field="counterParty" header="Counter Party" style={{ width: 130 }} />
+                <Column field="commodity" header="Commodity" style={{ width: 130 }} />
+                <Column field="tradeType" header="Type" style={{ width: 100 }} />
+                <Column header="Actions" body={(t: Trade) => (
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => setTrades(prev => prev.map(x => x.id === t.id ? { ...x, status: "Approved" } : x))} style={btnSuccess}>
+                      <i className="pi pi-check" />Approve
+                    </button>
+                    <button onClick={() => setTrades(prev => prev.map(x => x.id === t.id ? { ...x, status: "Rejected" } : x))} style={btnDanger}>
+                      Reject
+                    </button>
+                  </div>
+                )} style={{ width: 200 }} />
+              </DataTable>
+            </div>
+          )}
+
+          {/* Upload Files */}
+          {subChip === "upload" && (
+            <div>
+              <Dialog header="Upload Document" visible={uploadModalOpen} onHide={() => setUploadModalOpen(false)} style={{ width: 480 }} modal>
+                <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingTop: 8 }}>
+                  <Field label="Description (optional)">
+                    <input value={newDocDescription} onChange={e => setNewDocDescription(e.target.value)}
+                      style={nativeInput} placeholder="Enter description" />
+                  </Field>
+                  <input ref={fileInputRef} type="file" style={{ display: "none" }} onChange={handleFileSelect} />
+                  <button onClick={() => fileInputRef.current?.click()} style={btnSecondary}>
+                    <i className="pi pi-folder-open" />Select File
+                  </button>
+                </div>
+              </Dialog>
+
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-color)" }}>Document Repository</span>
+                <button onClick={() => setUploadModalOpen(true)} style={btnSecondary}>
+                  <i className="pi pi-upload" />Upload Files
+                </button>
+              </div>
+
+              <DataTable value={uploadedDocuments} size="small" stripedRows
+                emptyMessage="No documents uploaded yet."
+                pt={{ column: { headerCell: { style: thStyle }, bodyCell: { style: tdStyle } } }}
+              >
+                <Column header="Document" body={(d: UploadedDocument) => (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <i className="pi pi-file" style={{ color: "#cc1111", fontSize: 14 }} />
+                    <span style={{ fontSize: 12 }}>{d.name}</span>
+                  </div>
+                )} />
+                <Column field="description" header="Description" />
+                <Column field="uploadedBy" header="Uploaded By" />
+                <Column field="lastModified" header="Last Modified" />
+                <Column header="" body={(d: UploadedDocument) => (
+                  <button onClick={() => setUploadedDocuments(prev => prev.filter(x => x.id !== d.id))}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "#dc2626", fontSize: 13, padding: 4 }}>
+                    <i className="pi pi-times" />
+                  </button>
+                )} style={{ width: 50 }} />
+              </DataTable>
+            </div>
+          )}
+        </>
+      )}
     </DashboardLayout>
   )
 }
