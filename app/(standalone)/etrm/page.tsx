@@ -167,7 +167,7 @@ const REPORT_DATA: ReportGroup[] = [
 const ALL_COUNTERPARTIES = REPORT_DATA.map(g => g.counterParty)
 
 type ColKey = "mwh" | "settlement" | "sleeveFee" | "total" | "fixedPlusSleeve" | "avgMarketPrice" | "floatingPrice" | "invoice" | "approval" | "sap"
-const SETTLEMENT_COLS: { key: ColKey; label: string; width: number; align: "right" | "center" | "left" }[] = [
+const SETTLEMENT_COLS: { key: ColKey; label: string; width: number; align: "right" | "center" | "left"; required?: boolean }[] = [
   { key: "mwh",             label: "MWh",                      width: 100, align: "right"  },
   { key: "settlement",      label: "Settlement",               width: 120, align: "right"  },
   { key: "sleeveFee",       label: "Sleeve Fee",               width: 110, align: "right"  },
@@ -175,9 +175,9 @@ const SETTLEMENT_COLS: { key: ColKey; label: string; width: number; align: "righ
   { key: "fixedPlusSleeve", label: "Fixed Price + Sleeve Fee", width: 160, align: "right"  },
   { key: "avgMarketPrice",  label: "Avg. Market Price",        width: 130, align: "right"  },
   { key: "floatingPrice",   label: "Floating Price",           width: 120, align: "right"  },
-  { key: "invoice",         label: "Invoice",                  width: 60,  align: "center" },
-  { key: "approval",        label: "Approval",                 width: 60,  align: "center" },
-  { key: "sap",             label: "SAP",                      width: 60,  align: "center" },
+  { key: "invoice",         label: "Invoice",                  width: 60,  align: "center", required: true },
+  { key: "approval",        label: "Approval",                 width: 60,  align: "center", required: true },
+  { key: "sap",             label: "SAP",                      width: 60,  align: "center", required: true },
 ]
 
 function fmt(n: number): string {
@@ -249,6 +249,7 @@ function ETRMReports() {
   )
   // selected contract IDs (individual level only)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [invoiceValidationOpen, setInvoiceValidationOpen] = useState(false)
   // visible columns
   const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(
     () => new Set(SETTLEMENT_COLS.map(c => c.key))
@@ -391,7 +392,19 @@ function ETRMReports() {
     }
   }
 
-  const visCols = SETTLEMENT_COLS.filter(c => visibleCols.has(c.key))
+  const dataVisCols   = SETTLEMENT_COLS.filter(c => !c.required && visibleCols.has(c.key))
+  const statusVisCols = SETTLEMENT_COLS.filter(c => c.required)
+  const visCols = [...dataVisCols, ...statusVisCols]
+  const VAL_COL_W = 90
+  const valCols = [
+    { key: "val_mw",    label: "Total MW"  },
+    { key: "val_total", label: "Total"     },
+    { key: "val_rate",  label: "$/MWh"    },
+  ]
+  const statusW    = statusVisCols.reduce((s, c) => s + c.width, 0)
+  const valTotalW  = invoiceValidationOpen ? valCols.length * VAL_COL_W : 0
+  // minWidth: fixed cols + at least 80px per toggled data col so the table never collapses
+  const minTableWidth = 48 + 48 + 220 + valTotalW + statusW + dataVisCols.length * 80
   const toggleExpand = (cp: string) =>
     setExpanded(prev => { const n = new Set(prev); n.has(cp) ? n.delete(cp) : n.add(cp); return n })
 
@@ -484,7 +497,7 @@ function ETRMReports() {
               <label style={{ fontSize: 10, fontWeight: 500, color: "var(--text-color-secondary)" }}>Columns</label>
               <button onClick={() => setColsOpen(o => !o)} style={{ ...btnSecondary, height: CTRL_H, padding: "0 12px", gap: 6 }}>
                 <i className="pi pi-table" style={{ fontSize: 11 }} />
-                <span style={{ fontSize: 11, fontWeight: 600 }}>{visibleCols.size}/{SETTLEMENT_COLS.length}</span>
+                <span style={{ fontSize: 11, fontWeight: 600 }}>{SETTLEMENT_COLS.filter(c => !c.required && visibleCols.has(c.key)).length}/{SETTLEMENT_COLS.filter(c => !c.required).length}</span>
                 <i className="pi pi-chevron-down" style={{ fontSize: 9 }} />
               </button>
               {colsOpen && (
@@ -496,7 +509,7 @@ function ETRMReports() {
                   <div style={{ padding: "4px 14px 6px", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--text-color-secondary)", borderBottom: BORDER, marginBottom: 4 }}>
                     Show / Hide Columns
                   </div>
-                  {SETTLEMENT_COLS.map(col => (
+                  {SETTLEMENT_COLS.filter(col => !col.required).map(col => (
                     <label key={col.key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 14px", cursor: "pointer" }}
                       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "var(--surface-section)" }}
                       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "none" }}>
@@ -549,9 +562,17 @@ function ETRMReports() {
               </div>
             ))}
 
-            {/* Download Selected */}
-            <button style={{ ...btnPrimary, height: CTRL_H, padding: "0 14px" }}>
-              <i />Invoice validation
+            {/* Invoice Validation */}
+            <button
+              onClick={() => setInvoiceValidationOpen(o => !o)}
+              style={{
+                ...( invoiceValidationOpen ? { ...btnPrimary, background: "#16a34a", border: "none" } : btnPrimary ),
+                height: CTRL_H, padding: "0 14px",
+                transition: "background 0.2s",
+              }}
+            >
+              <i className={`pi pi-${invoiceValidationOpen ? "check-circle" : "file-check"}`} style={{ fontSize: 12 }} />
+              Invoice validation
             </button>
 
             {/* SELECT ACTION */}
@@ -596,28 +617,44 @@ function ETRMReports() {
           </div>
 
           {/* Settlement table — single unified table so all rows share one colgroup */}
-          <table style={{ width: "100%", borderCollapse: "collapse", borderSpacing: 0 }}>
+          <div style={{ border: BORDER, borderRadius: 12, overflow: "hidden" }}>
+          <div style={{ overflowX: "auto" }}>
+          <div style={{ position: "relative", width: "100%", minWidth: minTableWidth }}>
+          <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse", borderSpacing: 0 }}>
             <colgroup>
-              <col style={{ width: "3rem" }} />
-              <col style={{ width: "3rem" }} />
+              <col style={{ width: 48 }} />
+              <col style={{ width: 48 }} />
+              <col style={{ width: 220 }} />
+              {/* spacer col always present — absorbs remaining width so fixed cols never get redistributed */}
               <col />
-              {visCols.map(col => <col key={col.key} style={{ width: col.width }} />)}
+              {dataVisCols.map(col => <col key={col.key} />)}
+              {invoiceValidationOpen && valCols.map(vc => <col key={vc.key} style={{ width: VAL_COL_W }} />)}
+              {statusVisCols.map(col => <col key={col.key} style={{ width: col.width }} />)}
             </colgroup>
             <thead>
               <tr>
                 <th style={thStyle} />
                 <th style={thStyle} />
                 <th style={{ ...thStyle, textAlign: "left" }}>Counter Party</th>
-                {visCols.map(col => (
-                  <th key={col.key} style={{ ...thStyle, textAlign: col.align }}>
-                    {col.label}
-                  </th>
+                <th style={thStyle} />{/* spacer */}
+                {dataVisCols.map(col => (
+                  <th key={col.key} style={{ ...thStyle, textAlign: col.align }}>{col.label}</th>
+                ))}
+                {invoiceValidationOpen && valCols.map((vc) => (
+                  <th key={vc.key} style={{
+                    ...thStyle, textAlign: "right",
+                    position: "relative", zIndex: 3, background: "transparent",
+                    color: "#15803d",
+                  }}>{vc.label}</th>
+                ))}
+                {statusVisCols.map(col => (
+                  <th key={col.key} style={{ ...thStyle, textAlign: col.align }}>{col.label}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {groupRows.length === 0 && (
-                <tr><td colSpan={3 + visCols.length} style={{ ...tdStyle, textAlign: "center", color: "var(--text-color-secondary)", padding: 24 }}>
+                <tr><td colSpan={3 + 1 + dataVisCols.length + (invoiceValidationOpen ? valCols.length : 0) + statusVisCols.length} style={{ ...tdStyle, textAlign: "center", color: "var(--text-color-secondary)", padding: 24 }}>
                   No data for selected counterparties.
                 </td></tr>
               )}
@@ -636,6 +673,20 @@ function ETRMReports() {
                 const sgTd:  React.CSSProperties = { padding: "4px 12px", background: "var(--surface-section)" }
                 const cTdBase: React.CSSProperties = { padding: "6px 12px", fontSize: 12, fontWeight: 400, borderBottom: BORDER }
 
+                const valTd: React.CSSProperties = { position: "relative", zIndex: 3, background: "transparent" }
+
+                const valCells = (mwh: number, settlement: number, total: number, base: React.CSSProperties) => invoiceValidationOpen ? <>
+                  <td style={{ ...base, ...valTd }}>
+                    <div style={{ textAlign: "right", color: "#166534" }}>{mwh.toLocaleString("en-US", { minimumFractionDigits: 2 })}</div>
+                  </td>
+                  <td style={{ ...base, ...valTd }}>
+                    <div style={{ textAlign: "right" }}><MoneyCell value={settlement} /></div>
+                  </td>
+                  <td style={{ ...base, ...valTd }}>
+                    <div style={{ textAlign: "right" }}><MoneyCell value={total} /></div>
+                  </td>
+                </> : null
+
                 const contractRows = (list: ReportContract[], badgeBg: string, badgeColor: string, badgeLabel: string) =>
                   list.map(c => {
                     const sel = selectedIds.has(c.id)
@@ -653,7 +704,10 @@ function ETRMReports() {
                             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 11, fontFamily: "monospace", color: "var(--text-color-secondary)" }}>{c.name}</span>
                           </div>
                         </td>
-                        {visCols.map(col => <td key={col.key} style={cTd}>{renderContractCell(c, col.key)}</td>)}
+                        <td style={cTd} />{/* spacer */}
+                        {dataVisCols.map(col => <td key={col.key} style={cTd}>{renderContractCell(c, col.key)}</td>)}
+                        {valCells(c.mwh, c.settlement, c.total, cTd)}
+                        {statusVisCols.map(col => <td key={col.key} style={cTd}>{renderContractCell(c, col.key)}</td>)}
                       </tr>
                     )
                   })
@@ -666,7 +720,7 @@ function ETRMReports() {
                         <i className={`pi pi-chevron-${collapsed ? "right" : "down"}`} style={{ fontSize: 9, color: "var(--text-color-secondary)" }} />
                       </button>
                     </td>
-                    <td colSpan={1 + visCols.length} style={sgTd}>
+                    <td colSpan={1 + 1 + dataVisCols.length + (invoiceValidationOpen ? valCols.length : 0) + statusVisCols.length} style={sgTd}>
                       <button onClick={() => toggleSubgroup(key)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
                         <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--text-color-secondary)" }}>
                           {label} <span style={{ fontWeight: 400 }}>({count})</span>
@@ -693,7 +747,10 @@ function ETRMReports() {
                         </button>
                       </td>
                       <td style={grpTd}><span style={{ fontWeight: 700, fontSize: 13 }}>{group.counterParty}</span></td>
-                      {visCols.map(col => <td key={col.key} style={grpTd}>{renderGroupCell(group, col.key)}</td>)}
+                      <td style={grpTd} />{/* spacer */}
+                      {dataVisCols.map(col => <td key={col.key} style={grpTd}>{renderGroupCell(group, col.key)}</td>)}
+                      {valCells(group.mwh, group.settlement, group.total, grpTd)}
+                      {statusVisCols.map(col => <td key={col.key} style={grpTd}>{renderGroupCell(group, col.key)}</td>)}
                     </tr>
                     {/* Expansion */}
                     {isExp && <>
@@ -702,7 +759,7 @@ function ETRMReports() {
                         {!finCollapsed && contractRows(financial, "rgba(124,58,237,0.1)", "#6d28d9", "Financial")}
                       </>}
                       {showFin && showPhy && financial.length > 0 && physical.length > 0 && (
-                        <tr><td colSpan={3 + visCols.length} style={{ height: 6, background: "var(--surface-section)" }} /></tr>
+                        <tr><td colSpan={3 + 1 + dataVisCols.length + (invoiceValidationOpen ? valCols.length : 0) + statusVisCols.length} style={{ height: 6, background: "var(--surface-section)" }} /></tr>
                       )}
                       {showPhy && physical.length > 0 && <>
                         {subgroupHeader(phyKey, "Physical", physical.length, phyCollapsed)}
@@ -714,6 +771,26 @@ function ETRMReports() {
               })}
             </tbody>
           </table>
+
+          {/* Green box overlay — right-anchored at statusW so it always tracks the val columns */}
+          {invoiceValidationOpen && (
+            <div style={{
+              position: "absolute",
+              top: 0,
+              right: statusW,
+              bottom: 0,
+              width: valTotalW,
+              pointerEvents: "none",
+              zIndex: 2,
+              border: "2px solid rgba(22,163,74,0.7)",
+              borderRadius: 10,
+              background: "rgba(220,252,231,0.35)",
+            }} />
+          )}
+
+          </div>{/* position relative */}
+          </div>{/* overflowX auto */}
+          </div>{/* border+radius wrapper */}
         </>
       )}
     </div>
