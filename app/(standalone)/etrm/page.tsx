@@ -457,43 +457,115 @@ function ETRMReports() {
   return (
     <div>
       {/* Reject modal */}
-      <Dialog
-        header="Reject Invoice"
-        visible={rejectModal}
-        onHide={() => setRejectModal(false)}
-        style={{ width: 440 }}
-        modal
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingTop: 8 }}>
-          <p style={{ fontSize: 12, color: "var(--text-color-secondary)", margin: 0 }}>
-            Please provide a reason for rejection. This is required before submitting.
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <label style={{ fontSize: 11, fontWeight: 500, color: "var(--text-color-secondary)" }}>Reason *</label>
-            <textarea
-              value={rejectNote}
-              onChange={e => setRejectNote(e.target.value)}
-              rows={4}
-              placeholder="Enter rejection reason..."
-              style={{
-                padding: 8, fontSize: 12, border: BORDER, borderRadius: 6,
-                background: "var(--surface-card)", color: "var(--text-color)",
-                outline: "none", fontFamily: "inherit", resize: "vertical", boxSizing: "border-box", width: "100%",
-              }}
-            />
+      {rejectModal && (() => {
+        const target = contracts.find(c => c.id === rejectTargetId)
+        const invoice = rejectTargetId ? invoiceByContractId.get(rejectTargetId) : undefined
+        return (
+          <div
+            style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}
+            onMouseDown={e => { if (e.target === e.currentTarget) { setRejectModal(false); setRejectNote("") } }}
+          >
+            <div style={{
+              background: "var(--surface-card)", borderRadius: 12, width: 500, maxWidth: "92vw",
+              display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.22)",
+            }}>
+              {/* Header */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 24px 14px", borderBottom: BORDER }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(220,38,38,0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <i className="pi pi-times-circle" style={{ fontSize: 16, color: "#dc2626" }} />
+                  </div>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text-color)" }}>Reject Invoice</span>
+                </div>
+                <button
+                  onClick={() => { setRejectModal(false); setRejectNote("") }}
+                  style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "var(--text-color-secondary)", display: "flex", alignItems: "center" }}
+                >
+                  <i className="pi pi-times" style={{ fontSize: 14 }} />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+                {/* Contract summary card */}
+                {target && (
+                  <div style={{ background: "var(--surface-section)", border: BORDER, borderRadius: 8, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--text-color-secondary)" }}>Contract</div>
+                    <div style={{ fontSize: 12, fontFamily: "monospace", color: "var(--text-color)", fontWeight: 500 }}>{target.name}</div>
+                    {invoice && (
+                      <div style={{ display: "flex", gap: 20, marginTop: 2 }}>
+                        <span style={{ fontSize: 11, color: "var(--text-color-secondary)" }}>
+                          Invoice: <span style={{ fontWeight: 600, color: "var(--text-color)", fontFamily: "monospace" }}>{invoice.name}</span>
+                        </span>
+                        <span style={{ fontSize: 11, color: "var(--text-color-secondary)" }}>
+                          Counterparty: <span style={{ fontWeight: 600, color: "var(--text-color)" }}>{target.name.split(" ")[0]}</span>
+                        </span>
+                        <span style={{ fontSize: 11, color: "var(--text-color-secondary)" }}>
+                          Total: <span style={{ fontWeight: 600, color: invoice.invoiceTotal < 0 ? "#dc2626" : "#16a34a" }}>
+                            {(() => { const abs = Math.abs(invoice.invoiceTotal).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); return invoice.invoiceTotal < 0 ? `-$${abs}` : `$${abs}` })()}
+                          </span>
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Reason */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-color)" }}>Rejection reason <span style={{ color: "#dc2626" }}>*</span></label>
+                    <span style={{ fontSize: 11, color: "var(--text-color-secondary)" }}>{rejectNote.length}/300</span>
+                  </div>
+                  <textarea
+                    value={rejectNote}
+                    onChange={e => setRejectNote(e.target.value.slice(0, 300))}
+                    rows={4}
+                    autoFocus
+                    placeholder="Describe why this invoice is being rejected..."
+                    style={{
+                      padding: "10px 12px", fontSize: 12, border: BORDER, borderRadius: 8,
+                      background: "var(--surface-card)", color: "var(--text-color)",
+                      outline: "none", fontFamily: "inherit", resize: "none",
+                      boxSizing: "border-box", width: "100%", lineHeight: 1.5,
+                      transition: "border-color 0.15s",
+                    }}
+                    onFocus={e => { e.currentTarget.style.borderColor = "#dc2626" }}
+                    onBlur={e => { e.currentTarget.style.borderColor = "var(--surface-border)" }}
+                  />
+                  <p style={{ fontSize: 11, color: "var(--text-color-secondary)", margin: 0 }}>
+                    This message will be visible in the Status tooltip.
+                  </p>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "14px 24px", borderTop: BORDER }}>
+                <button
+                  onClick={() => { setRejectModal(false); setRejectNote("") }}
+                  style={{ ...btnSecondary, height: 36, padding: "0 20px" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleRejectConfirm}
+                  disabled={!rejectNote.trim()}
+                  style={{
+                    height: 36, padding: "0 20px", border: "none", borderRadius: 6,
+                    fontSize: 12, fontWeight: 600, cursor: rejectNote.trim() ? "pointer" : "not-allowed",
+                    background: rejectNote.trim() ? "#dc2626" : "var(--surface-section)",
+                    color: rejectNote.trim() ? "#fff" : "var(--text-color-secondary)",
+                    display: "inline-flex", alignItems: "center", gap: 6,
+                    transition: "background 0.15s, color 0.15s",
+                  }}
+                >
+                  <i className="pi pi-times-circle" style={{ fontSize: 12 }} />
+                  Reject
+                </button>
+              </div>
+            </div>
           </div>
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-            <button onClick={() => setRejectModal(false)} style={btnSecondary}>Cancel</button>
-            <button
-              onClick={handleRejectConfirm}
-              disabled={!rejectNote.trim()}
-              style={{ ...btnPrimary, opacity: rejectNote.trim() ? 1 : 0.45, cursor: rejectNote.trim() ? "pointer" : "not-allowed", background: "#dc2626" }}
-            >
-              <i className="pi pi-times" />Send
-            </button>
-          </div>
-        </div>
-      </Dialog>
+        )
+      })()}
 
       {/* Report sub-chips */}
       <div style={{ display: "flex", gap: 6, marginBottom: 20 }}>
