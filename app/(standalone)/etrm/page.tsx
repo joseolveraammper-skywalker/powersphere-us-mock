@@ -7,6 +7,7 @@ import { Column } from "primereact/column"
 import { Dialog } from "primereact/dialog"
 import type { DataTableExpandedRows } from "primereact/datatable"
 import { useCounterparties } from "@/lib/counterparty-context"
+import { ETRM_INVOICE_DATA } from "@/lib/etrm-invoice-mock"
 
 const MOCK_USER_EMAIL = "admin@powersphere.com"
 const BORDER = "1px solid var(--surface-border)"
@@ -128,6 +129,7 @@ type ReportContract = {
   id: string; name: string; contractType: "Physical" | "Financial"
   mwh: number; settlement: number; sleeveFee: number; total: number; fixedPlusSleeve: number; avgMarketPrice: number | null; floatingPrice: number | null
   invoiceArrived: boolean; approvalStatus: ApprovalStatus; sapStatus: "pending" | "sent" | "failed"
+  rejectNote?: string
 }
 type ReportGroup = { counterParty: string; contracts: ReportContract[] }
 
@@ -176,7 +178,7 @@ const SETTLEMENT_COLS: { key: ColKey; label: string; width: number; align: "righ
   { key: "avgMarketPrice",  label: "Avg. Market Price",        width: 130, align: "right"  },
   { key: "floatingPrice",   label: "Floating Price",           width: 120, align: "right"  },
   { key: "invoice",         label: "Invoice",                  width: 60,  align: "center", required: true },
-  { key: "approval",        label: "Approval",                 width: 60,  align: "center", required: true },
+  { key: "approval",        label: "Status",                   width: 60,  align: "center", required: true },
   { key: "sap",             label: "SAP",                      width: 60,  align: "center", required: true },
 ]
 
@@ -204,21 +206,61 @@ function PendingDots() {
   )
 }
 
-function StatusIcon({ value, type }: { value: boolean | ApprovalStatus | "pending" | "sent" | "failed"; type: "arrived" | "approval" | "sap" }) {
+function ClickTooltip({ text, children }: { text: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    function handleOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener("mousedown", handleOutside)
+    return () => document.removeEventListener("mousedown", handleOutside)
+  }, [open])
+  return (
+    <div ref={ref} style={{ position: "relative", display: "inline-flex" }}>
+      <button
+        onClick={e => { e.stopPropagation(); setOpen(v => !v) }}
+        style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "inline-flex", alignItems: "center" }}
+      >
+        {children}
+      </button>
+      {open && (
+        <div style={{
+          position: "absolute", bottom: "calc(100% + 6px)", left: "50%", transform: "translateX(-50%)",
+          background: "#1f2937", color: "#fff", fontSize: 11, padding: "5px 8px", borderRadius: 5,
+          whiteSpace: "normal", zIndex: 9999, boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
+          maxWidth: 260, textAlign: "center", lineHeight: 1.5, width: "max-content",
+        }}>
+          {text}
+          <div style={{
+            position: "absolute", top: "100%", left: "50%", transform: "translateX(-50%)",
+            width: 0, height: 0,
+            borderLeft: "5px solid transparent", borderRight: "5px solid transparent",
+            borderTop: "5px solid #1f2937",
+          }} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function StatusIcon({ value, type, tooltip }: { value: boolean | ApprovalStatus | "pending" | "sent" | "failed"; type: "arrived" | "approval" | "sap"; tooltip: string }) {
+  let icon: React.ReactNode
   if (type === "arrived") {
-    return value
+    icon = value
       ? <i className="pi pi-check" style={{ color: "#16a34a", fontSize: 13, fontWeight: 700 }} />
       : <PendingDots />
+  } else if (type === "approval") {
+    if (value === "approved") icon = <i className="pi pi-check" style={{ color: "#16a34a", fontSize: 13, fontWeight: 700 }} />
+    else if (value === "rejected") icon = <i className="pi pi-times" style={{ color: "#dc2626", fontSize: 13, fontWeight: 700 }} />
+    else icon = <PendingDots />
+  } else {
+    if (value === "sent")   icon = <i className="pi pi-check" style={{ color: "#16a34a", fontSize: 13, fontWeight: 700 }} />
+    else if (value === "failed") icon = <i className="pi pi-times" style={{ color: "#dc2626", fontSize: 13, fontWeight: 700 }} />
+    else icon = <PendingDots />
   }
-  if (type === "approval") {
-    if (value === "approved") return <i className="pi pi-check" style={{ color: "#16a34a", fontSize: 13, fontWeight: 700 }} />
-    if (value === "rejected") return <i className="pi pi-times" style={{ color: "#dc2626", fontSize: 13, fontWeight: 700 }} />
-    return <PendingDots />
-  }
-  // sap — read-only
-  if (value === "sent")   return <i className="pi pi-check" style={{ color: "#16a34a", fontSize: 13, fontWeight: 700 }} />
-  if (value === "failed") return <i className="pi pi-times" style={{ color: "#dc2626", fontSize: 13, fontWeight: 700 }} />
-  return <PendingDots />
+  return <ClickTooltip text={tooltip}>{icon}</ClickTooltip>
 }
 
 // ── ETRM Reports ──────────────────────────────────────────────────────────────
@@ -246,6 +288,10 @@ function ETRMReports() {
   // contracts state (mutable for approve/reject)
   const [contracts, setContracts] = useState<ReportContract[]>(() =>
     REPORT_DATA.flatMap(g => g.contracts)
+  )
+  const invoiceByContractId = useMemo(
+    () => new Map(ETRM_INVOICE_DATA.map(r => [r.contractId, r])),
+    []
   )
   // selected contract IDs (individual level only)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -345,7 +391,7 @@ function ETRMReports() {
 
   const handleRejectConfirm = () => {
     if (!rejectNote.trim() || !rejectTargetId) return
-    setContracts(prev => prev.map(c => c.id === rejectTargetId ? { ...c, approvalStatus: "rejected" } : c))
+    setContracts(prev => prev.map(c => c.id === rejectTargetId ? { ...c, approvalStatus: "rejected", rejectNote: rejectNote.trim() } : c))
     setSelectedIds(new Set())
     setRejectModal(false)
     setRejectTargetId(null)
@@ -385,9 +431,9 @@ function ETRMReports() {
       case "floatingPrice":   return <div style={{ textAlign: "right" }}>
         {c.floatingPrice != null ? <MoneyCell value={c.floatingPrice} /> : <span style={{ fontSize: 12, color: "var(--text-color-secondary)" }}>—</span>}
       </div>
-      case "invoice":         return <div style={{ display: "flex", justifyContent: "center" }}><StatusIcon value={c.invoiceArrived} type="arrived" /></div>
-      case "approval":        return <div style={{ display: "flex", justifyContent: "center" }}><StatusIcon value={c.approvalStatus} type="approval" /></div>
-      case "sap":             return <div style={{ display: "flex", justifyContent: "center" }}><StatusIcon value={c.sapStatus} type="sap" /></div>
+      case "invoice":         return <div style={{ display: "flex", justifyContent: "center" }}><StatusIcon value={c.invoiceArrived} type="arrived" tooltip={c.invoiceArrived ? "The PDF Invoice has been downloaded" : "The PDF Invoice has not been received"} /></div>
+      case "approval":        return <div style={{ display: "flex", justifyContent: "center" }}><StatusIcon value={c.approvalStatus} type="approval" tooltip={c.approvalStatus === "approved" ? "Approved by mockemail@ammper.com" : c.approvalStatus === "rejected" ? `Rejected by mockemail@ammper.com: ${c.rejectNote ?? ""}` : "Pending validation"} /></div>
+      case "sap":             return <div style={{ display: "flex", justifyContent: "center" }}><StatusIcon value={c.sapStatus} type="sap" tooltip={c.sapStatus === "sent" ? "Sent to SAP with ID: 0000035348" : c.sapStatus === "failed" ? "Sending to SAP failed due to error: 429" : "Pending send to SAP"} /></div>
       default:                return null
     }
   }
@@ -675,17 +721,34 @@ function ETRMReports() {
 
                 const valTd: React.CSSProperties = { position: "relative", zIndex: 3, background: "transparent" }
 
-                const valCells = (mwh: number, settlement: number, total: number, base: React.CSSProperties) => invoiceValidationOpen ? <>
-                  <td style={{ ...base, ...valTd }}>
-                    <div style={{ textAlign: "right", color: "#166534" }}>{mwh.toLocaleString("en-US", { minimumFractionDigits: 2 })}</div>
-                  </td>
-                  <td style={{ ...base, ...valTd }}>
-                    <div style={{ textAlign: "right" }}><MoneyCell value={settlement} /></div>
-                  </td>
-                  <td style={{ ...base, ...valTd }}>
-                    <div style={{ textAlign: "right" }}><MoneyCell value={total} /></div>
-                  </td>
-                </> : null
+                const valCells = (ids: string[], calcMwh: number, calcTotal: number, base: React.CSSProperties) => {
+                  if (!invoiceValidationOpen) return null
+                  const recs = ids.map(id => invoiceByContractId.get(id)).filter(Boolean) as typeof ETRM_INVOICE_DATA
+                  const none = recs.length === 0
+                  const invMwh   = recs.reduce((s, r) => s + r.invoiceMwh,   0)
+                  const invTotal = recs.reduce((s, r) => s + r.invoiceTotal, 0)
+                  const invRate  = ids.length === 1 && recs[0] ? recs[0].invoiceRate : null
+                  const mwhMatch   = !none && Math.abs(invMwh   - calcMwh)   < 0.05
+                  const totalMatch = !none && Math.abs(invTotal - calcTotal) < 0.05
+                  const dash = <span style={{ color: "var(--text-color-secondary)" }}>—</span>
+                  return <>
+                    <td style={{ ...base, ...valTd }}>
+                      <div style={{ textAlign: "right", fontSize: 12, color: none ? "var(--text-color-secondary)" : mwhMatch ? "#166534" : "#dc2626", fontWeight: 600 }}>
+                        {none ? dash : invMwh.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                      </div>
+                    </td>
+                    <td style={{ ...base, ...valTd }}>
+                      <div style={{ textAlign: "right", fontSize: 12, color: none ? "var(--text-color-secondary)" : totalMatch ? "#166534" : "#dc2626", fontWeight: 600 }}>
+                        {none ? dash : (() => { const abs = Math.abs(invTotal).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); return invTotal < 0 ? `-$${abs}` : `$${abs}` })()}
+                      </div>
+                    </td>
+                    <td style={{ ...base, ...valTd }}>
+                      <div style={{ textAlign: "right", fontSize: 12, color: "var(--text-color-secondary)" }}>
+                        {invRate != null ? `$${Math.abs(invRate).toFixed(2)}` : dash}
+                      </div>
+                    </td>
+                  </>
+                }
 
                 const contractRows = (list: ReportContract[], badgeBg: string, badgeColor: string, badgeLabel: string) =>
                   list.map(c => {
@@ -706,7 +769,7 @@ function ETRMReports() {
                         </td>
                         <td style={cTd} />{/* spacer */}
                         {dataVisCols.map(col => <td key={col.key} style={cTd}>{renderContractCell(c, col.key)}</td>)}
-                        {valCells(c.mwh, c.settlement, c.total, cTd)}
+                        {valCells([c.id], c.mwh, c.total, cTd)}
                         {statusVisCols.map(col => <td key={col.key} style={cTd}>{renderContractCell(c, col.key)}</td>)}
                       </tr>
                     )
@@ -730,6 +793,39 @@ function ETRMReports() {
                   </tr>
                 )
 
+                const subgroupTotalRow = (list: ReportContract[], label: string) => {
+                  const sub = {
+                    counterParty: label,
+                    contracts: list,
+                    mwh:             list.reduce((s, c) => s + c.mwh, 0),
+                    settlement:      list.reduce((s, c) => s + c.settlement, 0),
+                    sleeveFee:       list.reduce((s, c) => s + c.sleeveFee, 0),
+                    total:           list.reduce((s, c) => s + c.total, 0),
+                    fixedPlusSleeve: list.reduce((s, c) => s + c.fixedPlusSleeve, 0),
+                  }
+                  const sTd: React.CSSProperties = {
+                    padding: "5px 12px", fontSize: 12, fontWeight: 600,
+                    background: "var(--surface-section)",
+                    borderTop: `1px solid var(--surface-border)`,
+                    borderBottom: `1px solid var(--surface-border)`,
+                  }
+                  return (
+                    <tr key={`subtotal-${label}-${group.counterParty}`}>
+                      <td style={sTd} />
+                      <td style={sTd} />
+                      <td style={sTd}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-color-secondary)", fontStyle: "italic" }}>
+                          {label} Subtotal
+                        </span>
+                      </td>
+                      <td style={sTd} />
+                      {dataVisCols.map(col => <td key={col.key} style={sTd}>{renderGroupCell(sub, col.key)}</td>)}
+                      {valCells(sub.contracts.map(c => c.id), sub.mwh, sub.total, sTd)}
+                      {statusVisCols.map(col => <td key={col.key} style={sTd} />)}
+                    </tr>
+                  )
+                }
+
                 return (
                   <React.Fragment key={group.counterParty}>
                     {/* Group row */}
@@ -749,7 +845,7 @@ function ETRMReports() {
                       <td style={grpTd}><span style={{ fontWeight: 700, fontSize: 13 }}>{group.counterParty}</span></td>
                       <td style={grpTd} />{/* spacer */}
                       {dataVisCols.map(col => <td key={col.key} style={grpTd}>{renderGroupCell(group, col.key)}</td>)}
-                      {valCells(group.mwh, group.settlement, group.total, grpTd)}
+                      {valCells(group.contracts.map(c => c.id), group.mwh, group.total, grpTd)}
                       {statusVisCols.map(col => <td key={col.key} style={grpTd}>{renderGroupCell(group, col.key)}</td>)}
                     </tr>
                     {/* Expansion */}
@@ -757,6 +853,7 @@ function ETRMReports() {
                       {showFin && financial.length > 0 && <>
                         {subgroupHeader(finKey, "Financial", financial.length, finCollapsed)}
                         {!finCollapsed && contractRows(financial, "rgba(124,58,237,0.1)", "#6d28d9", "Financial")}
+                        {subgroupTotalRow(financial, "Financial")}
                       </>}
                       {showFin && showPhy && financial.length > 0 && physical.length > 0 && (
                         <tr><td colSpan={3 + 1 + dataVisCols.length + (invoiceValidationOpen ? valCols.length : 0) + statusVisCols.length} style={{ height: 6, background: "var(--surface-section)" }} /></tr>
@@ -764,6 +861,7 @@ function ETRMReports() {
                       {showPhy && physical.length > 0 && <>
                         {subgroupHeader(phyKey, "Physical", physical.length, phyCollapsed)}
                         {!phyCollapsed && contractRows(physical, "rgba(37,99,235,0.1)", "#1d4ed8", "Physical")}
+                        {subgroupTotalRow(physical, "Physical")}
                       </>}
                     </>}
                   </React.Fragment>

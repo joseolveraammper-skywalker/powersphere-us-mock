@@ -6,6 +6,8 @@ import { DataTable } from "primereact/datatable"
 import { Column } from "primereact/column"
 import type { DataTableExpandedRows } from "primereact/datatable"
 import { useCounterparties } from "@/lib/counterparty-context"
+import { ETRM_INVOICE_DATA } from "@/lib/etrm-invoice-mock"
+import type { ETRMInvoiceRecord } from "@/lib/etrm-invoice-mock"
 
 // ── Style constants ───────────────────────────────────────────────────────────
 const BORDER = "1px solid var(--surface-border)"
@@ -69,13 +71,12 @@ const WR_MOCK: Invoice[] = [
   { id: "w10", name: "SUI/21118",                receivedDate: "02/28/2026", period: "Feb 2026", fileSize: "1.1 MB", postedOnMis: true,  sentToSap: true,  downloaded: true, extractData: true,  billCheck: true,  sendToSap: "done"    },
 ]
 
-const ETRM_MOCK: Invoice[] = [
-  { id: "e1", name: "ETRM-STD/2026-031", counterparty: "EDF",   receivedDate: "03/31/2026", period: "Mar 2026", fileSize: "0.6 MB", postedOnMis: false, sentToSap: false, downloaded: true, extractData: true,  billCheck: true,  sendToSap: "done" },
-  { id: "e2", name: "ETRM-STD/2026-032", counterparty: "SHELL", receivedDate: "03/31/2026", period: "Mar 2026", fileSize: "0.4 MB", postedOnMis: false, sentToSap: false, downloaded: true, extractData: true,  billCheck: false, sendToSap: "none" },
-  { id: "e3", name: "ETRM-FIN/2026-014", counterparty: "EDF",   receivedDate: "03/30/2026", period: "Mar 2026", fileSize: "0.7 MB", postedOnMis: false, sentToSap: false, downloaded: true, extractData: true,  billCheck: true,  sendToSap: "pending" },
-  { id: "e4", name: "ETRM-SWP/2026-008", counterparty: "SHELL", receivedDate: "03/28/2026", period: "Mar 2026", fileSize: "0.3 MB", postedOnMis: false, sentToSap: false, downloaded: true, extractData: false, billCheck: false, sendToSap: "none" },
-  { id: "e5", name: "ETRM-STD/2026-029", counterparty: "EDF",   receivedDate: "02/28/2026", period: "Feb 2026", fileSize: "0.6 MB", postedOnMis: true,  sentToSap: true,  downloaded: true, extractData: true,  billCheck: true,  sendToSap: "done" },
-]
+const ETRM_MOCK: Invoice[] = ETRM_INVOICE_DATA.map(r => ({
+  id: r.id, name: r.name, counterparty: r.counterparty,
+  receivedDate: r.receivedDate, period: r.period, fileSize: r.fileSize,
+  postedOnMis: r.postedOnMis, sentToSap: r.sentToSap, downloaded: r.downloaded,
+  extractData: r.extractData, billCheck: r.billCheck, sendToSap: r.sendToSap,
+}))
 
 const ERCOT_ENTITIES = ["QSE-001 (AMMPERUSA)", "QSE-002 (FRMN)", "QSE-003 (LNCLN)"]
 const WR_REPORT_TYPES = ["SETTLEMENT", "SUI", "CRRBALANCING", "CRRAUCTION", "CARD", "SECURITIZATIONDEFAULT", "NETTING", "ENERGYONLY"]
@@ -122,6 +123,169 @@ function ClearableSelect({
   )
 }
 
+// ── Review Info Modal (ETRM) ──────────────────────────────────────────────────
+function fmt(n: number) {
+  const abs = Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return n < 0 ? `-$${abs}` : `$${abs}`
+}
+
+function ReviewInfoModal({ record, onClose }: { record: ETRMInvoiceRecord; onClose: () => void }) {
+  const fields: [string, string][] = [
+    ["Invoice Name",     record.name],
+    ["Counterparty",     record.counterparty],
+    ["Contract ID",      record.contractId],
+    ["Invoice Period",   record.period],
+    ["Received Date",    record.receivedDate],
+    ["File Size",        record.fileSize],
+    ["Invoice MWh",      record.invoiceMwh.toLocaleString("en-US", { minimumFractionDigits: 2 })],
+    ["Invoice Total",    fmt(record.invoiceTotal)],
+    ["Invoice Rate",     `$${Math.abs(record.invoiceRate).toFixed(2)} /MWh`],
+  ]
+
+  const thS: React.CSSProperties = {
+    fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em",
+    color: "var(--text-color-secondary)", borderBottom: BORDER, padding: "6px 12px", textAlign: "left",
+  }
+  const tdS: React.CSSProperties = { fontSize: 13, padding: "7px 12px", borderBottom: BORDER }
+
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 1000,
+        background: "rgba(0,0,0,0.45)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}
+      onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div style={{
+        background: "var(--surface-card)", borderRadius: 12,
+        width: 560, maxWidth: "90vw", maxHeight: "85vh",
+        display: "flex", flexDirection: "column",
+        boxShadow: "0 8px 32px rgba(0,0,0,0.22)",
+      }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 24px 14px", borderBottom: BORDER }}>
+          <span style={{ fontSize: 16, fontWeight: 700 }}>Review info</span>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "var(--text-color-secondary)", fontSize: 16, display: "flex" }}>
+            <i className="pi pi-times" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: "20px 24px", overflowY: "auto", flex: 1 }}>
+          {/* Fields grid */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "18px 32px", marginBottom: 28 }}>
+            {fields.map(([label, val]) => (
+              <div key={label}>
+                <div style={{ fontSize: 11, color: "var(--text-color-secondary)", marginBottom: 3, fontWeight: 500 }}>{label}</div>
+                <div style={{
+                  fontSize: 13, fontWeight: 500, color: "var(--text-color)",
+                  borderBottom: BORDER, paddingBottom: 4,
+                }}>{val}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Preview table */}
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 10 }}>Preview</div>
+          <div style={{ border: BORDER, borderRadius: 8, overflow: "hidden" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ background: "var(--surface-section)" }}>
+                  {["Invoice Name", "Counterparty", "Period", "MWh", "Total", "Rate $/MWh", "Bill Check"].map(h => (
+                    <th key={h} style={thS}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style={{ ...tdS, fontFamily: "monospace", fontSize: 12 }}>{record.name}</td>
+                  <td style={tdS}>{record.counterparty}</td>
+                  <td style={tdS}>{record.period}</td>
+                  <td style={{ ...tdS, textAlign: "right" }}>{record.invoiceMwh.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                  <td style={{ ...tdS, textAlign: "right", color: record.invoiceTotal < 0 ? "#dc2626" : "var(--text-color)" }}>{fmt(record.invoiceTotal)}</td>
+                  <td style={{ ...tdS, textAlign: "right" }}>${Math.abs(record.invoiceRate).toFixed(2)}</td>
+                  <td style={{ ...tdS, textAlign: "center" }}>
+                    {record.billCheck
+                      ? <i className="pi pi-check" style={{ color: "#16a34a", fontSize: 14 }} />
+                      : <span style={{ color: "var(--text-color-secondary)", fontSize: 12 }}>—</span>}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, padding: "14px 24px", borderTop: BORDER }}>
+          <button onClick={onClose} style={{ background: "none", border: BORDER, borderRadius: 6, fontSize: 13, fontWeight: 600, padding: "6px 20px", cursor: "pointer", color: "var(--text-color)" }}>
+            Cancel
+          </button>
+          <button onClick={onClose} style={{ background: "#cc1111", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, padding: "6px 20px", cursor: "pointer", color: "#fff" }}>
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Row action dropdown ───────────────────────────────────────────────────────
+function RowActionsCell({ etrmRecord, onReview }: {
+  etrmRecord: ETRMInvoiceRecord | undefined
+  onReview: (r: ETRMInvoiceRecord) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    function h(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener("mousedown", h)
+    return () => document.removeEventListener("mousedown", h)
+  }, [open])
+
+  return (
+    <div ref={ref} style={{ position: "relative", display: "inline-flex" }}>
+      <button
+        onClick={e => { e.stopPropagation(); setOpen(o => !o) }}
+        style={{
+          background: "none", border: BORDER, borderRadius: 6,
+          width: 28, height: 28, cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: "var(--text-color-secondary)",
+        }}
+      >
+        <i className="pi pi-ellipsis-v" style={{ fontSize: 12 }} />
+      </button>
+      {open && (
+        <div style={{
+          position: "absolute", right: 0, top: "calc(100% + 4px)", zIndex: 200,
+          background: "var(--surface-card)", border: BORDER, borderRadius: 6,
+          minWidth: 150, boxShadow: "0 4px 12px rgba(0,0,0,0.14)",
+        }}>
+          {etrmRecord && (
+            <button
+              onClick={e => { e.stopPropagation(); setOpen(false); onReview(etrmRecord) }}
+              style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left", background: "none", border: "none", padding: "8px 14px", fontSize: 12, cursor: "pointer", color: "var(--text-color)" }}
+              onMouseEnter={e => { e.currentTarget.style.background = "var(--surface-section)" }}
+              onMouseLeave={e => { e.currentTarget.style.background = "none" }}
+            >
+              <i className="pi pi-eye" style={{ fontSize: 12 }} /> Review info
+            </button>
+          )}
+          {["Download", "Extract Data", "Send to SAP"].map(a => (
+            <button key={a}
+              style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left", background: "none", border: "none", padding: "8px 14px", fontSize: 12, cursor: "pointer", color: "var(--text-color)" }}
+              onMouseEnter={e => { e.currentTarget.style.background = "var(--surface-section)" }}
+              onMouseLeave={e => { e.currentTarget.style.background = "none" }}
+            >{a}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Invoice Table ─────────────────────────────────────────────────────────────
 function InvoiceTable({
   invoices,
@@ -130,6 +294,8 @@ function InvoiceTable({
   kpiSent,
   showCounterpartyFilter = false,
   counterpartyOptions = [],
+  showRowActions = false,
+  etrmRecordMap = new Map(),
 }: {
   invoices: Invoice[]
   reportTypeOptions: string[]
@@ -137,6 +303,8 @@ function InvoiceTable({
   kpiSent: number
   showCounterpartyFilter?: boolean
   counterpartyOptions?: string[]
+  showRowActions?: boolean
+  etrmRecordMap?: Map<string, ETRMInvoiceRecord>
 }) {
   const today = new Date()
   const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split("T")[0]
@@ -151,6 +319,7 @@ function InvoiceTable({
   const [selected,     setSelected]     = useState<Invoice[]>([])
   const [expanded,     setExpanded]     = useState<DataTableExpandedRows>({})
   const [actionOpen,   setActionOpen]   = useState(false)
+  const [reviewRecord, setReviewRecord] = useState<ETRMInvoiceRecord | null>(null)
   const actionRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -190,6 +359,7 @@ function InvoiceTable({
 
   return (
     <div>
+      {reviewRecord && <ReviewInfoModal record={reviewRecord} onClose={() => setReviewRecord(null)} />}
       {/* Toolbar */}
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, marginBottom: 16, flexWrap: "wrap" }}>
 
@@ -315,6 +485,14 @@ function InvoiceTable({
         <Column header="Extract Data"    body={(r: Invoice) => <CheckCell value={r.extractData} />} style={{ width: 110, textAlign: "center" }} />
         <Column header="Bill Check"      body={(r: Invoice) => <CheckCell value={r.billCheck} />}   style={{ width: 100, textAlign: "center" }} />
         <Column header="Send to SAP"     body={(r: Invoice) => <SendToSapCell status={r.sendToSap} />} style={{ width: 100, textAlign: "center" }} />
+        {showRowActions && (
+          <Column header="" style={{ width: 48, textAlign: "center" }} body={(r: Invoice) => (
+            <RowActionsCell
+              etrmRecord={etrmRecordMap.get(r.id)}
+              onReview={setReviewRecord}
+            />
+          )} />
+        )}
       </DataTable>
     </div>
   )
@@ -347,6 +525,11 @@ export default function DocumentRepositoryPage() {
     { key: "etrm" as const, label: "ETRM Invoices" },
     { key: "ers"  as const, label: "ERS Documents" },
   ]
+
+  const etrmRecordMap = useMemo(
+    () => new Map(ETRM_INVOICE_DATA.map(r => [r.id, r])),
+    []
+  )
 
   return (
     <DashboardLayout pageTitle="Document Repository">
@@ -418,6 +601,8 @@ export default function DocumentRepositoryPage() {
                   kpiSent={21}
                   showCounterpartyFilter
                   counterpartyOptions={counterpartyOptions}
+                  showRowActions
+                  etrmRecordMap={etrmRecordMap}
                 />
               )}
 
