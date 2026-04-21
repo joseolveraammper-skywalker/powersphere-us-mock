@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useRef } from "react"
+import { useState, useMemo, useRef, useEffect } from "react"
 import { DashboardLayout } from "@/components/power-sphere/dashboard-layout"
 import { DataTable } from "primereact/datatable"
 import { Column } from "primereact/column"
@@ -12,31 +12,31 @@ type ReportStatus = "pending" | "approved" | "rejected"
 type Report = {
   id: number; report: string; uploadedDate: string; resourceType: string
   customer: string; asset: string; validation1: boolean; validation2: boolean
-  status: ReportStatus; rejectNote?: string
+  status: ReportStatus; rejectNote?: string; emailSent: boolean
 }
 
 // ============ MOCK DATA ============
 const INITIAL_REPORTS: Report[] = [
-  { id: 1,  report: "Daily Generation Summary - March 2026",     uploadedDate: "03-10-2026", resourceType: "NCLR", customer: "Texas Energy Co.",             asset: "Wind Farm Alpha",     validation1: true,  validation2: true,  status: "approved" },
-  { id: 2,  report: "Load Forecast Analysis Q1",                 uploadedDate: "03-09-2026", resourceType: "ESR",  customer: "Midwest Industrial",            asset: "Plant B-12",          validation1: true,  validation2: true,  status: "approved" },
-  { id: 3,  report: "Demand Response Event Report",              uploadedDate: "03-08-2026", resourceType: "GEN",  customer: "Commercial Partners LLC",        asset: "Portfolio C",         validation1: true,  validation2: false, status: "pending"  },
-  { id: 4,  report: "ERCOT Settlement Data Feb 2026",            uploadedDate: "03-07-2026", resourceType: "NCLR", customer: "Texas Energy Co.",             asset: "Solar Array Delta",   validation1: true,  validation2: true,  status: "approved" },
-  { id: 5,  report: "Outage Impact Assessment",                  uploadedDate: "03-06-2026", resourceType: "ESR",  customer: "Gulf Coast Power",              asset: "Gas Turbine Unit 3",  validation1: false, validation2: false, status: "pending"  },
-  { id: 6,  report: "Monthly Performance Review",                uploadedDate: "03-05-2026", resourceType: "GEN",  customer: "White Realty Management, Inc.", asset: "Portfolio A",         validation1: true,  validation2: true,  status: "approved" },
-  { id: 7,  report: "Compliance Audit Report",                   uploadedDate: "03-04-2026", resourceType: "NCLR", customer: "Molinas Enterprises Inc",       asset: "Facility East",       validation1: true,  validation2: true,  status: "pending"  },
-  { id: 8,  report: "Equipment Maintenance Log",                 uploadedDate: "03-03-2026", resourceType: "ESR",  customer: "Next Level Blending LLC",       asset: "Plant C-7",           validation1: true,  validation2: false, status: "rejected", rejectNote: "Missing asset ID on page 3." },
-  { id: 9,  report: "Energy Trading Summary",                    uploadedDate: "03-02-2026", resourceType: "GEN",  customer: "Wild Duck Bar & Grill LLC",     asset: "Commercial Unit",     validation1: true,  validation2: true,  status: "approved" },
-  { id: 10, report: "Ancillary Services Report - Feb 2026",      uploadedDate: "03-01-2026", resourceType: "NCLR", customer: "Lone Star Energy Partners",     asset: "Substation Alpha-4",  validation1: true,  validation2: true,  status: "approved" },
-  { id: 11, report: "Reactive Power Compensation Log",           uploadedDate: "02-28-2026", resourceType: "ESR",  customer: "Rio Grande Grid LLC",           asset: "Capacitor Bank 7",    validation1: true,  validation2: false, status: "pending"  },
-  { id: 12, report: "Voltage Regulation Monthly Summary",        uploadedDate: "02-27-2026", resourceType: "GEN",  customer: "Texas Energy Co.",             asset: "Wind Farm Alpha",     validation1: true,  validation2: true,  status: "approved" },
-  { id: 13, report: "Transmission Constraint Analysis",          uploadedDate: "02-26-2026", resourceType: "NCLR", customer: "Coastal Wind & Solar LLC",      asset: "Offshore Platform 2", validation1: false, validation2: false, status: "rejected", rejectNote: "Constraint assumptions do not match ERCOT published data." },
-  { id: 14, report: "Renewable Integration Assessment Q4",       uploadedDate: "02-25-2026", resourceType: "ESR",  customer: "Midwest Industrial",            asset: "Plant B-12",          validation1: true,  validation2: true,  status: "pending"  },
-  { id: 15, report: "Frequency Response Event Log",              uploadedDate: "02-24-2026", resourceType: "GEN",  customer: "Gulf Coast Power",              asset: "Gas Turbine Unit 3",  validation1: true,  validation2: true,  status: "approved" },
-  { id: 16, report: "Spinning Reserve Activation Report",        uploadedDate: "02-23-2026", resourceType: "NCLR", customer: "Commercial Partners LLC",        asset: "Portfolio C",         validation1: true,  validation2: false, status: "pending"  },
-  { id: 17, report: "Power Quality Incident Summary",            uploadedDate: "02-22-2026", resourceType: "ESR",  customer: "Next Level Blending LLC",       asset: "Plant C-7",           validation1: true,  validation2: true,  status: "approved" },
-  { id: 18, report: "ERCOT COP Submission Audit",                uploadedDate: "02-21-2026", resourceType: "GEN",  customer: "Molinas Enterprises Inc",       asset: "Facility East",       validation1: true,  validation2: true,  status: "pending"  },
-  { id: 19, report: "Load Shed Event Documentation",             uploadedDate: "02-20-2026", resourceType: "NCLR", customer: "White Realty Management, Inc.", asset: "Portfolio A",         validation1: false, validation2: false, status: "pending"  },
-  { id: 20, report: "Annual Reliability Performance Report",     uploadedDate: "02-19-2026", resourceType: "ESR",  customer: "Wild Duck Bar & Grill LLC",     asset: "Commercial Unit",     validation1: true,  validation2: true,  status: "approved" },
+  { id: 1,  report: "Daily Generation Summary - March 2026",     uploadedDate: "03-10-2026", resourceType: "NCLR", customer: "Texas Energy Co.",             asset: "Wind Farm Alpha",     validation1: true,  validation2: true,  status: "approved", emailSent: true  },
+  { id: 2,  report: "Load Forecast Analysis Q1",                 uploadedDate: "03-09-2026", resourceType: "ESR",  customer: "Midwest Industrial",            asset: "Plant B-12",          validation1: true,  validation2: true,  status: "approved", emailSent: true  },
+  { id: 3,  report: "Demand Response Event Report",              uploadedDate: "03-08-2026", resourceType: "GEN",  customer: "Commercial Partners LLC",        asset: "Portfolio C",         validation1: true,  validation2: false, status: "pending",  emailSent: false },
+  { id: 4,  report: "ERCOT Settlement Data Feb 2026",            uploadedDate: "03-07-2026", resourceType: "NCLR", customer: "Texas Energy Co.",             asset: "Solar Array Delta",   validation1: true,  validation2: true,  status: "approved", emailSent: true  },
+  { id: 5,  report: "Outage Impact Assessment",                  uploadedDate: "03-06-2026", resourceType: "ESR",  customer: "Gulf Coast Power",              asset: "Gas Turbine Unit 3",  validation1: false, validation2: false, status: "pending",  emailSent: false },
+  { id: 6,  report: "Monthly Performance Review",                uploadedDate: "03-05-2026", resourceType: "GEN",  customer: "White Realty Management, Inc.", asset: "Portfolio A",         validation1: true,  validation2: true,  status: "approved", emailSent: false },
+  { id: 7,  report: "Compliance Audit Report",                   uploadedDate: "03-04-2026", resourceType: "NCLR", customer: "Molinas Enterprises Inc",       asset: "Facility East",       validation1: true,  validation2: true,  status: "pending",  emailSent: false },
+  { id: 8,  report: "Equipment Maintenance Log",                 uploadedDate: "03-03-2026", resourceType: "ESR",  customer: "Next Level Blending LLC",       asset: "Plant C-7",           validation1: true,  validation2: false, status: "rejected", rejectNote: "Missing asset ID on page 3.", emailSent: false },
+  { id: 9,  report: "Energy Trading Summary",                    uploadedDate: "03-02-2026", resourceType: "GEN",  customer: "Wild Duck Bar & Grill LLC",     asset: "Commercial Unit",     validation1: true,  validation2: true,  status: "approved", emailSent: true  },
+  { id: 10, report: "Ancillary Services Report - Feb 2026",      uploadedDate: "03-01-2026", resourceType: "NCLR", customer: "Lone Star Energy Partners",     asset: "Substation Alpha-4",  validation1: true,  validation2: true,  status: "approved", emailSent: true  },
+  { id: 11, report: "Reactive Power Compensation Log",           uploadedDate: "02-28-2026", resourceType: "ESR",  customer: "Rio Grande Grid LLC",           asset: "Capacitor Bank 7",    validation1: true,  validation2: false, status: "pending",  emailSent: false },
+  { id: 12, report: "Voltage Regulation Monthly Summary",        uploadedDate: "02-27-2026", resourceType: "GEN",  customer: "Texas Energy Co.",             asset: "Wind Farm Alpha",     validation1: true,  validation2: true,  status: "approved", emailSent: true  },
+  { id: 13, report: "Transmission Constraint Analysis",          uploadedDate: "02-26-2026", resourceType: "NCLR", customer: "Coastal Wind & Solar LLC",      asset: "Offshore Platform 2", validation1: false, validation2: false, status: "rejected", rejectNote: "Constraint assumptions do not match ERCOT published data.", emailSent: false },
+  { id: 14, report: "Renewable Integration Assessment Q4",       uploadedDate: "02-25-2026", resourceType: "ESR",  customer: "Midwest Industrial",            asset: "Plant B-12",          validation1: true,  validation2: true,  status: "pending",  emailSent: false },
+  { id: 15, report: "Frequency Response Event Log",              uploadedDate: "02-24-2026", resourceType: "GEN",  customer: "Gulf Coast Power",              asset: "Gas Turbine Unit 3",  validation1: true,  validation2: true,  status: "approved", emailSent: false },
+  { id: 16, report: "Spinning Reserve Activation Report",        uploadedDate: "02-23-2026", resourceType: "NCLR", customer: "Commercial Partners LLC",        asset: "Portfolio C",         validation1: true,  validation2: false, status: "pending",  emailSent: false },
+  { id: 17, report: "Power Quality Incident Summary",            uploadedDate: "02-22-2026", resourceType: "ESR",  customer: "Next Level Blending LLC",       asset: "Plant C-7",           validation1: true,  validation2: true,  status: "approved", emailSent: true  },
+  { id: 18, report: "ERCOT COP Submission Audit",                uploadedDate: "02-21-2026", resourceType: "GEN",  customer: "Molinas Enterprises Inc",       asset: "Facility East",       validation1: true,  validation2: true,  status: "pending",  emailSent: false },
+  { id: 19, report: "Load Shed Event Documentation",             uploadedDate: "02-20-2026", resourceType: "NCLR", customer: "White Realty Management, Inc.", asset: "Portfolio A",         validation1: false, validation2: false, status: "pending",  emailSent: false },
+  { id: 20, report: "Annual Reliability Performance Report",     uploadedDate: "02-19-2026", resourceType: "ESR",  customer: "Wild Duck Bar & Grill LLC",     asset: "Commercial Unit",     validation1: true,  validation2: true,  status: "approved", emailSent: true  },
 ]
 
 const assetResourceTypeMap: Record<string, string> = {
@@ -44,7 +44,7 @@ const assetResourceTypeMap: Record<string, string> = {
   "Solar Array Delta": "NCLR", "Gas Turbine Unit 3": "ESR", "Portfolio A": "GEN",
   "Facility East": "NCLR", "Plant C-7": "ESR", "Commercial Unit": "GEN",
   "Building Complex A": "GEN", "Substation Alpha-4": "NCLR", "Capacitor Bank 7": "ESR",
-  "Offshore Platform 2": "NCLR", "Coastal Platform": "GEN",
+  "Offshore Platform 2": "NCLR",
 }
 
 function parseReportDate(dateStr: string): Date {
@@ -53,9 +53,9 @@ function parseReportDate(dateStr: string): Date {
 }
 
 // ============ STYLE CONSTANTS ============
-const BORDER    = "1px solid var(--surface-border)"
-const CTRL_H    = "30px"
-const PANEL_H   = 620
+const BORDER  = "1px solid var(--surface-border)"
+const CTRL_H  = "30px"
+const PANEL_H = 620
 
 const nativeInput: React.CSSProperties = {
   height: CTRL_H, padding: "0 0.5rem", fontSize: 12, border: BORDER, borderRadius: 6,
@@ -98,18 +98,65 @@ function TypePill({ type }: { type: string }) {
   )
 }
 
-function StatusPill({ status }: { status: ReportStatus }) {
-  const map: Record<ReportStatus, { color: string; label: string }> = {
-    approved: { color: "#16a34a", label: "Approved" },
-    rejected: { color: "#dc2626", label: "Rejected" },
-    pending:  { color: "#9ca3af", label: "Pending"  },
-  }
-  const s = map[status]
+function PendingDots() {
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-      <span style={{ width: 6, height: 6, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
-      <span style={{ fontSize: 11, color: s.color, fontWeight: 600 }}>{s.label}</span>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
+      {[0, 1, 2].map(i => <span key={i} style={{ width: 4, height: 4, borderRadius: "50%", background: "#9ca3af" }} />)}
     </span>
+  )
+}
+
+function ClickTooltip({ text, children }: { text: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const fn = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener("mousedown", fn)
+    return () => document.removeEventListener("mousedown", fn)
+  }, [open])
+  return (
+    <div ref={ref} style={{ position: "relative", display: "inline-flex" }}>
+      <button onClick={e => { e.stopPropagation(); setOpen(v => !v) }} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "inline-flex", alignItems: "center" }}>
+        {children}
+      </button>
+      {open && (
+        <div style={{ position: "absolute", bottom: "calc(100% + 6px)", left: "50%", transform: "translateX(-50%)", background: "#1f2937", color: "#fff", fontSize: 11, padding: "5px 8px", borderRadius: 5, whiteSpace: "normal", zIndex: 9999, boxShadow: "0 2px 8px rgba(0,0,0,0.25)", maxWidth: 240, textAlign: "center", lineHeight: 1.5, width: "max-content" }}>
+          {text}
+          <div style={{ position: "absolute", top: "100%", left: "50%", transform: "translateX(-50%)", width: 0, height: 0, borderLeft: "5px solid transparent", borderRight: "5px solid transparent", borderTop: "5px solid #1f2937" }} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ReportStatusSteps({ report }: { report: Report }) {
+  const step2Tooltip = report.status === "approved"
+    ? "Approved by john@ammper.com"
+    : report.status === "rejected"
+    ? `Rejected by john@ammper.com. Reason: ${report.rejectNote ?? "No reason provided"}`
+    : "Pending approval"
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+      <ClickTooltip text="Uploaded by john@ammper.com">
+        <i className="pi pi-check" style={{ fontSize: 11, color: "#16a34a" }} />
+      </ClickTooltip>
+      <i className="pi pi-angle-right" style={{ fontSize: 9, color: "var(--text-color-secondary)" }} />
+      <ClickTooltip text={step2Tooltip}>
+        {report.status === "approved"
+          ? <i className="pi pi-check" style={{ fontSize: 11, color: "#16a34a" }} />
+          : report.status === "rejected"
+          ? <i className="pi pi-times" style={{ fontSize: 11, color: "#dc2626" }} />
+          : <PendingDots />}
+      </ClickTooltip>
+      <i className="pi pi-angle-right" style={{ fontSize: 9, color: "var(--text-color-secondary)" }} />
+      <ClickTooltip text={report.emailSent ? "Email sent" : "Email not yet sent"}>
+        {report.emailSent
+          ? <i className="pi pi-check" style={{ fontSize: 11, color: "#16a34a" }} />
+          : <PendingDots />}
+      </ClickTooltip>
+    </div>
   )
 }
 
@@ -118,8 +165,7 @@ function PdfMockPages({ report }: { report: Report }) {
   const pageStyle: React.CSSProperties = {
     width: "100%", background: "#fff", borderRadius: 4,
     boxShadow: "0 4px 24px rgba(0,0,0,0.35)", padding: "36px 44px",
-    display: "flex", flexDirection: "column", gap: 18, color: "#1a1a1a",
-    boxSizing: "border-box",
+    display: "flex", flexDirection: "column", gap: 18, color: "#1a1a1a", boxSizing: "border-box",
   }
   const pageFooter = (n: number) => (
     <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 10, display: "flex", justifyContent: "space-between", marginTop: "auto" }}>
@@ -127,10 +173,8 @@ function PdfMockPages({ report }: { report: Report }) {
       <span style={{ fontSize: 9, color: "#9ca3af" }}>Page {n} of 3</span>
     </div>
   )
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-
       {/* Page 1 */}
       <div style={pageStyle}>
         <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "2px solid #cc1111", paddingBottom: 14 }}>
@@ -164,7 +208,6 @@ function PdfMockPages({ report }: { report: Report }) {
         </div>
         {pageFooter(1)}
       </div>
-
       {/* Page 2 */}
       <div style={pageStyle}>
         <div style={{ fontSize: 13, fontWeight: 700, borderBottom: "1px solid #e5e7eb", paddingBottom: 10 }}>Compliance & Standards</div>
@@ -187,10 +230,10 @@ function PdfMockPages({ report }: { report: Report }) {
           </thead>
           <tbody>
             {[
-              ["Generation Output", "850 MW", "867 MW", "+2.0%", "✓"],
-              ["Availability Factor", "95.0%", "96.4%", "+1.4%", "✓"],
-              ["Heat Rate",           "9,800 BTU/kWh", "9,742 BTU/kWh", "-0.6%", "✓"],
-              ["Ramp Rate",           "30 MW/min",     "28.5 MW/min",   "-5.0%", "⚠"],
+              ["Generation Output", "850 MW",        "867 MW",        "+2.0%", "✓"],
+              ["Availability Factor","95.0%",          "96.4%",         "+1.4%", "✓"],
+              ["Heat Rate",         "9,800 BTU/kWh", "9,742 BTU/kWh", "-0.6%", "✓"],
+              ["Ramp Rate",         "30 MW/min",     "28.5 MW/min",   "-5.0%", "⚠"],
             ].map(([m, t, a, v, s]) => (
               <tr key={m}>
                 <td style={{ padding: "6px 10px", border: "1px solid #e5e7eb", fontWeight: 500 }}>{m}</td>
@@ -204,46 +247,34 @@ function PdfMockPages({ report }: { report: Report }) {
         </table>
         {pageFooter(2)}
       </div>
-
       {/* Page 3 */}
       <div style={pageStyle}>
         <div style={{ fontSize: 13, fontWeight: 700, borderBottom: "1px solid #e5e7eb", paddingBottom: 10 }}>Performance Charts</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           {[
-            { label: "Generation Output (MW)", bars: [65, 78, 82, 71, 88, 92, 85, 79, 83, 90, 87, 81], color: "#cc1111" },
-            { label: "Response Time (sec)",    bars: [45, 52, 38, 41, 55, 48, 42, 50, 44, 39, 47, 43], color: "#1a5ca8" },
-            { label: "Availability (%)",       bars: [95, 97, 96, 98, 94, 99, 97, 96, 98, 97, 95, 98], color: "#2d7a2d" },
-            { label: "Heat Rate (BTU/kWh)",    bars: [72, 68, 75, 70, 65, 73, 69, 74, 71, 67, 76, 70], color: "#b45309" },
+            { label: "Generation Output (MW)", bars: [65,78,82,71,88,92,85,79,83,90,87,81], color: "#cc1111" },
+            { label: "Response Time (sec)",    bars: [45,52,38,41,55,48,42,50,44,39,47,43], color: "#1a5ca8" },
+            { label: "Availability (%)",       bars: [95,97,96,98,94,99,97,96,98,97,95,98], color: "#2d7a2d" },
+            { label: "Heat Rate (BTU/kWh)",    bars: [72,68,75,70,65,73,69,74,71,67,76,70], color: "#b45309" },
           ].map(({ label, bars, color }) => (
             <div key={label} style={{ padding: "10px 12px", borderRadius: 8, background: "#f9fafb", border: "1px solid #e5e7eb" }}>
               <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: "#888", marginBottom: 8 }}>{label}</div>
               <div style={{ height: 44, display: "flex", alignItems: "flex-end", gap: 2 }}>
-                {bars.map((v, i) => (
-                  <div key={i} style={{ flex: 1, borderRadius: "2px 2px 0 0", height: `${v}%`, background: color, opacity: 0.75 }} />
-                ))}
+                {bars.map((v, i) => <div key={i} style={{ flex: 1, borderRadius: "2px 2px 0 0", height: `${v}%`, background: color, opacity: 0.75 }} />)}
               </div>
             </div>
           ))}
         </div>
         <div style={{ marginTop: 8, padding: "12px 14px", borderRadius: 8, background: "#f9fafb", border: "1px solid #e5e7eb" }}>
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#888", marginBottom: 6 }}>Summary & Recommendations</div>
-          <p style={{ fontSize: 11, lineHeight: 1.7, color: "#374151", margin: 0 }}>
-            Overall operational performance for the reporting period met or exceeded targets. The minor ramp rate variance is under investigation and a corrective action plan will be submitted within 5 business days. All ERCOT and NERC compliance obligations were satisfied.
-          </p>
+          <p style={{ fontSize: 11, lineHeight: 1.7, color: "#374151", margin: 0 }}>Overall operational performance met or exceeded targets. The minor ramp rate variance is under investigation and a corrective action plan will be submitted within 5 business days. All ERCOT and NERC compliance obligations were satisfied.</p>
         </div>
         <div style={{ borderTop: "2px solid #1a1a1a", paddingTop: 12, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
-          <div>
-            <div style={{ fontSize: 9, color: "#888", marginBottom: 2 }}>Prepared by</div>
-            <div style={{ fontSize: 11, fontWeight: 600 }}>Operations Team — Ammper Power</div>
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: 9, color: "#888", marginBottom: 2 }}>Approved by</div>
-            <div style={{ fontSize: 11, fontStyle: "italic", color: "#6b7280" }}>Pending review</div>
-          </div>
+          <div><div style={{ fontSize: 9, color: "#888", marginBottom: 2 }}>Prepared by</div><div style={{ fontSize: 11, fontWeight: 600 }}>Operations Team — Ammper Power</div></div>
+          <div style={{ textAlign: "right" }}><div style={{ fontSize: 9, color: "#888", marginBottom: 2 }}>Approved by</div><div style={{ fontSize: 11, fontStyle: "italic", color: "#6b7280" }}>Pending review</div></div>
         </div>
         {pageFooter(3)}
       </div>
-
     </div>
   )
 }
@@ -252,19 +283,26 @@ function PdfMockPages({ report }: { report: Report }) {
 export default function RealTimeOperationsPage() {
   const [activeTab, setActiveTab] = useState(0)
 
-  // Reports mutable state
-  const [reports, setReports] = useState<Report[]>(INITIAL_REPORTS)
+  const [reports, setReports]         = useState<Report[]>(INITIAL_REPORTS)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
-  const [previewReport, setPreviewReport] = useState<Report | null>(null)
-  const [pdfPage, setPdfPage] = useState(1)
+  const [previewReportId, setPreviewReportId] = useState<number | null>(null)
+  const [pdfPage, setPdfPage]         = useState(1)
+
+  // Always derive the live preview report from mutable reports state
+  const previewReport = previewReportId != null ? reports.find(r => r.id === previewReportId) ?? null : null
+
+  // Reject modal — single source of truth, works for both table actions and PDF viewer buttons
+  const [rejectModal, setRejectModal]       = useState(false)
+  const [rejectNote, setRejectNote]         = useState("")
+  const [rejectTargetId, setRejectTargetId] = useState<number | null>(null)
 
   // Filters
-  const [reportFilterQuery, setReportFilterQuery]                 = useState("")
-  const [reportStartDate, setReportStartDate]                     = useState("2026-02-01")
-  const [reportEndDate, setReportEndDate]                         = useState("2026-03-31")
-  const [reportFilterCustomer, setReportFilterCustomer]           = useState<string | null>(null)
-  const [reportFilterAsset, setReportFilterAsset]                 = useState<string | null>(null)
-  const [reportFilterResourceType, setReportFilterResourceType]   = useState<string | null>(null)
+  const [reportFilterQuery, setReportFilterQuery]               = useState("")
+  const [reportStartDate, setReportStartDate]                   = useState("2026-02-01")
+  const [reportEndDate, setReportEndDate]                       = useState("2026-03-31")
+  const [reportFilterCustomer, setReportFilterCustomer]         = useState<string | null>(null)
+  const [reportFilterAsset, setReportFilterAsset]               = useState<string | null>(null)
+  const [reportFilterResourceType, setReportFilterResourceType] = useState<string | null>(null)
 
   // Upload modal
   const [uploadModalOpen, setUploadModalOpen] = useState(false)
@@ -272,17 +310,12 @@ export default function RealTimeOperationsPage() {
   const [selectedAsset, setSelectedAsset]       = useState("")
   const [dragActive, setDragActive]             = useState(false)
 
-  // Reject modal
-  const [rejectModal, setRejectModal]         = useState(false)
-  const [rejectNote, setRejectNote]           = useState("")
-  const [rejectTargetId, setRejectTargetId]   = useState<number | null>(null)
-
   const dailyLogRef = useRef<DailyLogHandle>(null)
 
   const autoResourceType = selectedAsset ? assetResourceTypeMap[selectedAsset] || "" : ""
-  const uniqueCustomers      = [...new Set(INITIAL_REPORTS.map(r => r.customer))]
-  const uniqueAssets         = [...new Set(INITIAL_REPORTS.map(r => r.asset))]
-  const uniqueResourceTypes  = [...new Set(INITIAL_REPORTS.map(r => r.resourceType))]
+  const uniqueCustomers     = [...new Set(INITIAL_REPORTS.map(r => r.customer))]
+  const uniqueAssets        = [...new Set(INITIAL_REPORTS.map(r => r.asset))]
+  const uniqueResourceTypes = [...new Set(INITIAL_REPORTS.map(r => r.resourceType))]
 
   const filteredReports = useMemo(() => reports.filter(r => {
     const d = parseReportDate(r.uploadedDate)
@@ -298,25 +331,24 @@ export default function RealTimeOperationsPage() {
   }), [reports, reportStartDate, reportEndDate, reportFilterCustomer, reportFilterAsset, reportFilterResourceType, reportFilterQuery])
 
   // ── Selection helpers ──
-  const allFilteredSelected = filteredReports.length > 0 && filteredReports.every(r => selectedIds.has(r.id))
-  const someFilteredSelected = filteredReports.some(r => selectedIds.has(r.id))
-  const toggleAll = () => {
-    if (allFilteredSelected) {
-      setSelectedIds(prev => { const n = new Set(prev); filteredReports.forEach(r => n.delete(r.id)); return n })
-    } else {
-      setSelectedIds(prev => { const n = new Set(prev); filteredReports.forEach(r => n.add(r.id)); return n })
-    }
-  }
-  const toggleOne = (id: number) =>
-    setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const allSelected  = filteredReports.length > 0 && filteredReports.every(r => selectedIds.has(r.id))
+  const someSelected = filteredReports.some(r => selectedIds.has(r.id))
+  const toggleAll    = () => setSelectedIds(prev => {
+    const n = new Set(prev)
+    if (allSelected) filteredReports.forEach(r => n.delete(r.id))
+    else             filteredReports.forEach(r => n.add(r.id))
+    return n
+  })
+  const toggleOne = (id: number) => setSelectedIds(prev => {
+    const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n
+  })
 
-  // ── Actions ──
-  const handleApprove = () => {
-    setReports(prev => prev.map(r => selectedIds.has(r.id) ? { ...r, status: "approved" as const } : r))
-    setSelectedIds(new Set())
+  // ── Report mutations ──
+  const approveIds = (ids: number[]) => {
+    setReports(prev => prev.map(r => ids.includes(r.id) ? { ...r, status: "approved" as const } : r))
+    setSelectedIds(prev => { const n = new Set(prev); ids.forEach(id => n.delete(id)); return n })
   }
-  const openReject = () => {
-    const [id] = selectedIds
+  const openRejectModal = (id: number) => {
     setRejectTargetId(id)
     setRejectNote("")
     setRejectModal(true)
@@ -324,15 +356,16 @@ export default function RealTimeOperationsPage() {
   const confirmReject = () => {
     if (!rejectNote.trim() || rejectTargetId == null) return
     setReports(prev => prev.map(r => r.id === rejectTargetId ? { ...r, status: "rejected" as const, rejectNote: rejectNote.trim() } : r))
-    setSelectedIds(new Set())
-    setRejectModal(false)
-    setRejectTargetId(null)
-    setRejectNote("")
+    setSelectedIds(prev => { const n = new Set(prev); n.delete(rejectTargetId); return n })
+    setRejectModal(false); setRejectTargetId(null); setRejectNote("")
   }
+  const sendEmail = (ids: number[]) =>
+    setReports(prev => prev.map(r => ids.includes(r.id) ? { ...r, emailSent: true } : r))
 
-  const handleAction = (action: string) => {
-    if (action === "approve") handleApprove()
-    if (action === "reject")  openReject()
+  const handleSelectAction = (action: string) => {
+    if (action === "approve")    approveIds([...selectedIds])
+    if (action === "reject")     openRejectModal([...selectedIds][0])
+    if (action === "send-email") sendEmail([...selectedIds])
   }
 
   const handleDrag = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setDragActive(e.type !== "dragleave" && e.type !== "drop") }
@@ -340,24 +373,24 @@ export default function RealTimeOperationsPage() {
 
   // ── Column bodies ──
   const checkboxHeader = (
-    <input
-      type="checkbox"
-      checked={allFilteredSelected}
-      ref={el => { if (el) el.indeterminate = someFilteredSelected && !allFilteredSelected }}
+    <input type="checkbox"
+      checked={allSelected}
+      ref={el => { if (el) el.indeterminate = someSelected && !allSelected }}
       onChange={toggleAll}
+      onClick={e => e.stopPropagation()}
       style={{ width: 14, height: 14, cursor: "pointer", accentColor: "#cc1111" }}
     />
   )
   const checkboxBody = (row: Report) => (
-    <input
-      type="checkbox"
+    <input type="checkbox"
       checked={selectedIds.has(row.id)}
       onChange={() => toggleOne(row.id)}
+      onClick={e => e.stopPropagation()}
       style={{ width: 14, height: 14, cursor: "pointer", accentColor: "#cc1111" }}
     />
   )
   const typeBody       = (row: Report) => <TypePill type={row.resourceType} />
-  const statusBody     = (row: Report) => <StatusPill status={row.status} />
+  const statusBody     = (row: Report) => <ReportStatusSteps report={row} />
   const validationBody = (row: Report) => (
     <div style={{ display: "flex", gap: 8 }}>
       {[row.validation1, row.validation2].map((v, i) => (
@@ -369,22 +402,18 @@ export default function RealTimeOperationsPage() {
     </div>
   )
   const actionsBody = (row: Report) => (
-    <div style={{ display: "flex", gap: 2 }}>
-      <button
-        onClick={() => { setPreviewReport(prev => prev?.id === row.id ? null : row); setPdfPage(1) }}
-        title="Preview"
-        style={{
-          width: 26, height: 26, display: "inline-flex", alignItems: "center", justifyContent: "center",
-          background: previewReport?.id === row.id ? "rgba(204,17,17,0.08)" : "none",
-          border: previewReport?.id === row.id ? "1px solid #cc1111" : "1px solid transparent",
-          borderRadius: 6, cursor: "pointer",
-          color: previewReport?.id === row.id ? "#cc1111" : "var(--text-color-secondary)",
-        }}
-      >
+    <div style={{ display: "flex", gap: 1 }} onClick={e => e.stopPropagation()}>
+      <button onClick={() => { setPreviewReportId(prev => prev === row.id ? null : row.id); setPdfPage(1) }} title="Preview"
+        style={{ width: 26, height: 26, display: "inline-flex", alignItems: "center", justifyContent: "center", background: previewReportId === row.id ? "rgba(204,17,17,0.08)" : "none", border: previewReportId === row.id ? "1px solid #cc1111" : "1px solid transparent", borderRadius: 6, cursor: "pointer", color: previewReportId === row.id ? "#cc1111" : "var(--text-color-secondary)" }}>
         <i className="pi pi-eye" style={{ fontSize: 11 }} />
       </button>
-      <button title="Download" style={{ width: 26, height: 26, display: "inline-flex", alignItems: "center", justifyContent: "center", background: "none", border: "1px solid transparent", borderRadius: 6, cursor: "pointer", color: "var(--text-color-secondary)" }}>
+      <button title="Download"
+        style={{ width: 26, height: 26, display: "inline-flex", alignItems: "center", justifyContent: "center", background: "none", border: "1px solid transparent", borderRadius: 6, cursor: "pointer", color: "var(--text-color-secondary)" }}>
         <i className="pi pi-download" style={{ fontSize: 11 }} />
+      </button>
+      <button onClick={() => sendEmail([row.id])} title="Send email"
+        style={{ width: 26, height: 26, display: "inline-flex", alignItems: "center", justifyContent: "center", background: row.emailSent ? "rgba(22,163,74,0.08)" : "none", border: row.emailSent ? "1px solid #16a34a" : "1px solid transparent", borderRadius: 6, cursor: "pointer", color: row.emailSent ? "#16a34a" : "var(--text-color-secondary)" }}>
+        <i className="pi pi-envelope" style={{ fontSize: 11 }} />
       </button>
     </div>
   )
@@ -418,7 +447,7 @@ export default function RealTimeOperationsPage() {
                 {target && (
                   <div style={{ background: "var(--surface-section)", border: BORDER, borderRadius: 8, padding: "10px 14px" }}>
                     <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--text-color-secondary)", marginBottom: 4 }}>Report</div>
-                    <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text-color)" }}>{target.report}</div>
+                    <div style={{ fontSize: 12, fontWeight: 500 }}>{target.report}</div>
                     <div style={{ fontSize: 11, color: "var(--text-color-secondary)", marginTop: 4 }}>{target.customer} — {target.asset}</div>
                   </div>
                 )}
@@ -427,10 +456,7 @@ export default function RealTimeOperationsPage() {
                     <label style={{ fontSize: 12, fontWeight: 600 }}>Rejection reason <span style={{ color: "#dc2626" }}>*</span></label>
                     <span style={{ fontSize: 11, color: "var(--text-color-secondary)" }}>{rejectNote.length}/300</span>
                   </div>
-                  <textarea
-                    value={rejectNote}
-                    onChange={e => setRejectNote(e.target.value.slice(0, 300))}
-                    rows={4} autoFocus
+                  <textarea value={rejectNote} onChange={e => setRejectNote(e.target.value.slice(0, 300))} rows={4} autoFocus
                     placeholder="Describe why this report is being rejected..."
                     style={{ padding: "10px 12px", fontSize: 12, border: BORDER, borderRadius: 8, background: "var(--surface-card)", color: "var(--text-color)", outline: "none", fontFamily: "inherit", resize: "none", boxSizing: "border-box", width: "100%", lineHeight: 1.5 }}
                     onFocus={e => { e.currentTarget.style.borderColor = "#dc2626" }}
@@ -441,13 +467,9 @@ export default function RealTimeOperationsPage() {
               </div>
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "12px 22px", borderTop: BORDER }}>
                 <button onClick={() => { setRejectModal(false); setRejectNote("") }} style={{ ...btnSecondary, height: 34, padding: "0 18px" }}>Cancel</button>
-                <button
-                  onClick={confirmReject}
-                  disabled={!rejectNote.trim()}
-                  style={{ height: 34, padding: "0 18px", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: rejectNote.trim() ? "pointer" : "not-allowed", background: rejectNote.trim() ? "#dc2626" : "var(--surface-section)", color: rejectNote.trim() ? "#fff" : "var(--text-color-secondary)", display: "inline-flex", alignItems: "center", gap: 6 }}
-                >
-                  <i className="pi pi-times-circle" style={{ fontSize: 12 }} />
-                  Reject
+                <button onClick={confirmReject} disabled={!rejectNote.trim()}
+                  style={{ height: 34, padding: "0 18px", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: rejectNote.trim() ? "pointer" : "not-allowed", background: rejectNote.trim() ? "#dc2626" : "var(--surface-section)", color: rejectNote.trim() ? "#fff" : "var(--text-color-secondary)", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <i className="pi pi-times-circle" style={{ fontSize: 12 }} />Reject
                 </button>
               </div>
             </div>
@@ -460,13 +482,11 @@ export default function RealTimeOperationsPage() {
         const mLabel: React.CSSProperties = { display: "block", fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-color-secondary)", marginBottom: 4 }
         const mInput: React.CSSProperties = { width: "100%", padding: "0.375rem 0.5rem", fontSize: 12, border: BORDER, borderRadius: 6, background: "var(--surface-card)", color: "var(--text-color)", outline: "none", boxSizing: "border-box", fontFamily: "inherit" }
         return (
-          <Dialog
-            header={<div style={{ display: "flex", alignItems: "center", gap: 8 }}><div style={{ width: 26, height: 26, borderRadius: 6, background: "rgba(204,17,17,0.10)", display: "flex", alignItems: "center", justifyContent: "center" }}><i className="pi pi-upload" style={{ fontSize: 11, color: "#cc1111" }} /></div><span style={{ fontSize: 13, fontWeight: 700 }}>Upload Report</span></div>}
+          <Dialog header={<div style={{ display: "flex", alignItems: "center", gap: 8 }}><div style={{ width: 26, height: 26, borderRadius: 6, background: "rgba(204,17,17,0.10)", display: "flex", alignItems: "center", justifyContent: "center" }}><i className="pi pi-upload" style={{ fontSize: 11, color: "#cc1111" }} /></div><span style={{ fontSize: 13, fontWeight: 700 }}>Upload Report</span></div>}
             visible={uploadModalOpen} onHide={() => setUploadModalOpen(false)} style={{ width: 400 }} modal
-            pt={{ header: { style: { borderBottom: BORDER, padding: "0.75rem 1rem" } }, content: { style: { padding: "1rem" } } }}
-          >
+            pt={{ header: { style: { borderBottom: BORDER, padding: "0.75rem 1rem" } }, content: { style: { padding: "1rem" } } }}>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.875rem" }}>
-              <div style={{ border: `2px dashed ${dragActive ? "#cc1111" : "var(--surface-border)"}`, borderRadius: 10, background: dragActive ? "rgba(204,17,17,0.04)" : "var(--surface-section)", padding: "1.5rem 1rem", textAlign: "center", transition: "border-color 0.15s, background 0.15s" }} onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}>
+              <div style={{ border: `2px dashed ${dragActive ? "#cc1111" : "var(--surface-border)"}`, borderRadius: 10, background: dragActive ? "rgba(204,17,17,0.04)" : "var(--surface-section)", padding: "1.5rem 1rem", textAlign: "center" }} onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}>
                 <div style={{ width: 36, height: 36, borderRadius: 8, background: "rgba(204,17,17,0.10)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 0.625rem" }}><i className="pi pi-upload" style={{ fontSize: 14, color: "#cc1111" }} /></div>
                 <p style={{ fontSize: 13, fontWeight: 500, color: "var(--text-color)", margin: 0 }}>Drop a PDF file here</p>
                 <p style={{ fontSize: 11, color: "var(--text-color-secondary)", margin: "0.25rem 0 0.75rem" }}>or</p>
@@ -525,23 +545,11 @@ export default function RealTimeOperationsPage() {
               </div>
             </div>
             <div style={{ width: 1, height: 24, background: "var(--surface-border)" }} />
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <i className="pi pi-check-circle" style={{ fontSize: 11, color: "#16a34a" }} />
-              <span style={{ fontSize: 11, color: "var(--text-color-secondary)" }}>Approved</span>
-              <span style={{ fontSize: 14, fontWeight: 700, color: "#16a34a" }}>{kpiApproved}</span>
-            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}><i className="pi pi-check-circle" style={{ fontSize: 11, color: "#16a34a" }} /><span style={{ fontSize: 11, color: "var(--text-color-secondary)" }}>Approved</span><span style={{ fontSize: 14, fontWeight: 700, color: "#16a34a" }}>{kpiApproved}</span></div>
             <div style={{ width: 1, height: 24, background: "var(--surface-border)" }} />
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <i className="pi pi-clock" style={{ fontSize: 11, color: "#b45309" }} />
-              <span style={{ fontSize: 11, color: "var(--text-color-secondary)" }}>Pending</span>
-              <span style={{ fontSize: 14, fontWeight: 700, color: "#b45309" }}>{kpiPending}</span>
-            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}><i className="pi pi-clock" style={{ fontSize: 11, color: "#b45309" }} /><span style={{ fontSize: 11, color: "var(--text-color-secondary)" }}>Pending</span><span style={{ fontSize: 14, fontWeight: 700, color: "#b45309" }}>{kpiPending}</span></div>
             <div style={{ width: 1, height: 24, background: "var(--surface-border)" }} />
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <i className="pi pi-times-circle" style={{ fontSize: 11, color: "#dc2626" }} />
-              <span style={{ fontSize: 11, color: "var(--text-color-secondary)" }}>Rejected</span>
-              <span style={{ fontSize: 14, fontWeight: 700, color: "#dc2626" }}>{kpiRejected}</span>
-            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}><i className="pi pi-times-circle" style={{ fontSize: 11, color: "#dc2626" }} /><span style={{ fontSize: 11, color: "var(--text-color-secondary)" }}>Rejected</span><span style={{ fontSize: 14, fontWeight: 700, color: "#dc2626" }}>{kpiRejected}</span></div>
           </div>
 
           {/* Filter + Action bar */}
@@ -565,59 +573,53 @@ export default function RealTimeOperationsPage() {
             <select value={reportFilterResourceType ?? ""} onChange={e => setReportFilterResourceType(e.target.value || null)} style={{ ...nativeSelect, minWidth: 90 }}>
               <option value="">Type</option>{uniqueResourceTypes.map(o => <option key={o} value={o}>{o}</option>)}
             </select>
-
-            {/* Select Action */}
-            <select
-              value=""
-              disabled={selectedIds.size === 0}
-              onChange={e => { handleAction(e.target.value); e.target.value = "" }}
-              style={{ ...nativeSelect, minWidth: 130, opacity: selectedIds.size === 0 ? 0.45 : 1 }}
-            >
+            <select value="" disabled={selectedIds.size === 0}
+              onChange={e => { handleSelectAction(e.target.value) }}
+              style={{ ...nativeSelect, minWidth: 130, opacity: selectedIds.size === 0 ? 0.45 : 1 }}>
               <option value="" disabled>Select action…</option>
               <option value="approve">Approve</option>
               <option value="reject" disabled={selectedIds.size !== 1}>Reject</option>
+              <option value="send-email">Send email</option>
               <option value="download">Download</option>
             </select>
-
             {selectedIds.size > 0 && (
-              <span style={{ fontSize: 11, color: "var(--text-color-secondary)" }}>{selectedIds.size} selected</span>
+              <span style={{ fontSize: 11, color: "var(--text-color-secondary)", whiteSpace: "nowrap" }}>{selectedIds.size} selected</span>
             )}
-
             <button onClick={() => setUploadModalOpen(true)} style={btnPrimary}>
               <i className="pi pi-upload" style={{ fontSize: 11 }} />Upload
             </button>
           </div>
 
           {/* Split layout */}
-          <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+          <div style={{ display: "flex", gap: 16 }}>
 
-            {/* Table panel */}
-            <div style={{ flex: "0 0 calc(50% - 8px)", height: PANEL_H, overflow: "hidden", border: BORDER, borderRadius: 12, display: "flex", flexDirection: "column" }}>
-              <div style={{ flex: 1, overflowY: "auto" }}>
-                <DataTable
-                  value={filteredReports}
-                  dataKey="id"
-                  size="small"
-                  paginator
-                  rows={8}
-                  emptyMessage="No reports match the current filters."
-                  style={{ background: "var(--surface-card)" }}
-                  pt={{
-                    thead: { style: { background: "var(--surface-card)", position: "sticky", top: 0, zIndex: 1 } },
-                    tbody: { style: { background: "var(--surface-card)" } },
-                    column: { headerCell: { style: thStyle }, bodyCell: { style: tdStyle } },
-                    paginator: { root: { style: { borderTop: BORDER, fontSize: 12, padding: "6px 12px", background: "var(--surface-card)" } } },
-                  }}
-                >
-                  <Column header={checkboxHeader} body={checkboxBody} style={{ width: 44 }} />
-                  <Column field="report"       header="Report"     sortable style={{ minWidth: 160 }} />
-                  <Column field="uploadedDate" header="Uploaded"   sortable style={{ width: 100 }} />
-                  <Column header="Type"        body={typeBody}               style={{ width: 70 }} />
-                  <Column header="Validation"  body={validationBody}         style={{ width: 80 }} />
-                  <Column header="Status"      body={statusBody}             style={{ width: 90 }} />
-                  <Column header=""            body={actionsBody}            style={{ width: 64 }} />
-                </DataTable>
-              </div>
+            {/* Table panel — scrollable inside fixed height, paginator pinned to bottom */}
+            <div style={{ flex: "0 0 calc(50% - 8px)", height: PANEL_H, border: BORDER, borderRadius: 12, overflow: "hidden" }}>
+              <DataTable
+                value={filteredReports}
+                dataKey="id"
+                size="small"
+                scrollable
+                scrollHeight={`${PANEL_H - 48}px`}
+                paginator
+                rows={8}
+                emptyMessage="No reports match the current filters."
+                style={{ background: "var(--surface-card)" }}
+                pt={{
+                  thead:   { style: { background: "var(--surface-card)" } },
+                  tbody:   { style: { background: "var(--surface-card)" } },
+                  column:  { headerCell: { style: thStyle }, bodyCell: { style: tdStyle } },
+                  paginator: { root: { style: { borderTop: BORDER, fontSize: 12, padding: "4px 12px", background: "var(--surface-card)" } } },
+                }}
+              >
+                <Column header={checkboxHeader} body={checkboxBody}  style={{ width: 44 }} />
+                <Column field="report"          header="Report"       sortable style={{ minWidth: 160 }} />
+                <Column field="uploadedDate"    header="Uploaded"     sortable style={{ width: 100 }} />
+                <Column header="Type"           body={typeBody}       style={{ width: 66 }} />
+                <Column header="Validation"     body={validationBody} style={{ width: 80 }} />
+                <Column header="Status"         body={statusBody}     style={{ width: 100 }} />
+                <Column header=""               body={actionsBody}    style={{ width: 86 }} />
+              </DataTable>
             </div>
 
             {/* PDF viewer panel */}
@@ -625,22 +627,45 @@ export default function RealTimeOperationsPage() {
               {previewReport ? (
                 <>
                   {/* Toolbar */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: BORDER, flexShrink: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", borderBottom: BORDER, flexShrink: 0, flexWrap: "wrap" }}>
                     <i className="pi pi-file-pdf" style={{ fontSize: 13, color: "#cc1111" }} />
-                    <span style={{ fontSize: 12, fontWeight: 600, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
                       {previewReport.report}.pdf
                     </span>
-                    <button onClick={() => setPdfPage(p => Math.max(1, p - 1))} disabled={pdfPage === 1} style={{ background: "none", border: "none", cursor: pdfPage === 1 ? "default" : "pointer", padding: 4, color: pdfPage === 1 ? "var(--text-color-secondary)" : "var(--text-color)", opacity: pdfPage === 1 ? 0.4 : 1, display: "inline-flex" }}>
-                      <i className="pi pi-chevron-left" style={{ fontSize: 11 }} />
+                    {/* Page nav */}
+                    <button onClick={() => setPdfPage(p => Math.max(1, p - 1))} disabled={pdfPage === 1} style={{ background: "none", border: "none", cursor: pdfPage === 1 ? "default" : "pointer", padding: 3, color: "var(--text-color-secondary)", opacity: pdfPage === 1 ? 0.4 : 1, display: "inline-flex" }}>
+                      <i className="pi pi-chevron-left" style={{ fontSize: 10 }} />
                     </button>
-                    <span style={{ fontSize: 11, color: "var(--text-color-secondary)", minWidth: 36, textAlign: "center" }}>{pdfPage} / 3</span>
-                    <button onClick={() => setPdfPage(p => Math.min(3, p + 1))} disabled={pdfPage === 3} style={{ background: "none", border: "none", cursor: pdfPage === 3 ? "default" : "pointer", padding: 4, color: pdfPage === 3 ? "var(--text-color-secondary)" : "var(--text-color)", opacity: pdfPage === 3 ? 0.4 : 1, display: "inline-flex" }}>
-                      <i className="pi pi-chevron-right" style={{ fontSize: 11 }} />
+                    <span style={{ fontSize: 11, color: "var(--text-color-secondary)", minWidth: 32, textAlign: "center" }}>{pdfPage} / 3</span>
+                    <button onClick={() => setPdfPage(p => Math.min(3, p + 1))} disabled={pdfPage === 3} style={{ background: "none", border: "none", cursor: pdfPage === 3 ? "default" : "pointer", padding: 3, color: "var(--text-color-secondary)", opacity: pdfPage === 3 ? 0.4 : 1, display: "inline-flex" }}>
+                      <i className="pi pi-chevron-right" style={{ fontSize: 10 }} />
                     </button>
-                    <button title="Download" style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "var(--text-color-secondary)", display: "inline-flex" }}>
+                    {/* Divider */}
+                    <div style={{ width: 1, height: 18, background: "var(--surface-border)", flexShrink: 0 }} />
+                    {/* Approve button */}
+                    <button
+                      onClick={() => approveIds([previewReport.id])}
+                      disabled={previewReport.status === "approved"}
+                      title="Approve this report"
+                      style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: previewReport.status === "approved" ? "default" : "pointer", border: "1px solid #16a34a", background: previewReport.status === "approved" ? "rgba(22,163,74,0.12)" : "none", color: previewReport.status === "approved" ? "#16a34a" : "#16a34a", opacity: previewReport.status === "approved" ? 0.5 : 1 }}>
+                      <i className="pi pi-check" style={{ fontSize: 10 }} />
+                      {previewReport.status === "approved" ? "Approved" : "Approve"}
+                    </button>
+                    {/* Reject button */}
+                    <button
+                      onClick={() => openRejectModal(previewReport.id)}
+                      disabled={previewReport.status === "rejected"}
+                      title="Reject this report"
+                      style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: previewReport.status === "rejected" ? "default" : "pointer", border: "1px solid #dc2626", background: previewReport.status === "rejected" ? "rgba(220,38,38,0.10)" : "none", color: "#dc2626", opacity: previewReport.status === "rejected" ? 0.5 : 1 }}>
+                      <i className="pi pi-times" style={{ fontSize: 10 }} />
+                      {previewReport.status === "rejected" ? "Rejected" : "Reject"}
+                    </button>
+                    {/* Divider */}
+                    <div style={{ width: 1, height: 18, background: "var(--surface-border)", flexShrink: 0 }} />
+                    <button title="Download" style={{ background: "none", border: "none", cursor: "pointer", padding: 3, color: "var(--text-color-secondary)", display: "inline-flex" }}>
                       <i className="pi pi-download" style={{ fontSize: 12 }} />
                     </button>
-                    <button onClick={() => setPreviewReport(null)} title="Close" style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "var(--text-color-secondary)", display: "inline-flex" }}>
+                    <button onClick={() => setPreviewReportId(null)} title="Close" style={{ background: "none", border: "none", cursor: "pointer", padding: 3, color: "var(--text-color-secondary)", display: "inline-flex" }}>
                       <i className="pi pi-times" style={{ fontSize: 12 }} />
                     </button>
                   </div>
@@ -661,7 +686,6 @@ export default function RealTimeOperationsPage() {
         </div>
       )}
 
-      {/* ── Daily Log ── */}
       {activeTab === 1 && <DailyLog ref={dailyLogRef} />}
     </DashboardLayout>
   )
