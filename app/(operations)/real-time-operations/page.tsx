@@ -280,8 +280,9 @@ function PdfMockPages({ report }: { report: Report }) {
 export default function RealTimeOperationsPage() {
   const [activeTab, setActiveTab] = useState(0)
 
-  const [reports, setReports]         = useState<Report[]>(INITIAL_REPORTS)
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [reports, setReports]               = useState<Report[]>(INITIAL_REPORTS)
+  const [selectedReports, setSelectedReports] = useState<Report[]>([])
+  const selectedIds = useMemo(() => new Set(selectedReports.map(r => r.id)), [selectedReports])
   const [previewReportId, setPreviewReportId] = useState<number | null>(null)
   const [pdfPage, setPdfPage]         = useState(1)
 
