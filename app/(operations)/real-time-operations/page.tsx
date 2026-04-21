@@ -11,32 +11,32 @@ import { DailyLog, type DailyLogHandle } from "./DailyLog"
 type ReportStatus = "pending" | "approved" | "rejected"
 type Report = {
   id: number; report: string; uploadedDate: string; resourceType: string
-  customer: string; asset: string; validation1: boolean; validation2: boolean
+  customer: string; asset: string
   status: ReportStatus; rejectNote?: string; emailSent: boolean
 }
 
 // ============ MOCK DATA ============
 const INITIAL_REPORTS: Report[] = [
-  { id: 1,  report: "Daily Generation Summary - March 2026",     uploadedDate: "03-10-2026", resourceType: "NCLR", customer: "Texas Energy Co.",             asset: "Wind Farm Alpha",     validation1: true,  validation2: true,  status: "approved", emailSent: true  },
-  { id: 2,  report: "Load Forecast Analysis Q1",                 uploadedDate: "03-09-2026", resourceType: "ESR",  customer: "Midwest Industrial",            asset: "Plant B-12",          validation1: true,  validation2: true,  status: "approved", emailSent: true  },
-  { id: 3,  report: "Demand Response Event Report",              uploadedDate: "03-08-2026", resourceType: "GEN",  customer: "Commercial Partners LLC",        asset: "Portfolio C",         validation1: true,  validation2: false, status: "pending",  emailSent: false },
-  { id: 4,  report: "ERCOT Settlement Data Feb 2026",            uploadedDate: "03-07-2026", resourceType: "NCLR", customer: "Texas Energy Co.",             asset: "Solar Array Delta",   validation1: true,  validation2: true,  status: "approved", emailSent: true  },
-  { id: 5,  report: "Outage Impact Assessment",                  uploadedDate: "03-06-2026", resourceType: "ESR",  customer: "Gulf Coast Power",              asset: "Gas Turbine Unit 3",  validation1: false, validation2: false, status: "pending",  emailSent: false },
-  { id: 6,  report: "Monthly Performance Review",                uploadedDate: "03-05-2026", resourceType: "GEN",  customer: "White Realty Management, Inc.", asset: "Portfolio A",         validation1: true,  validation2: true,  status: "approved", emailSent: false },
-  { id: 7,  report: "Compliance Audit Report",                   uploadedDate: "03-04-2026", resourceType: "NCLR", customer: "Molinas Enterprises Inc",       asset: "Facility East",       validation1: true,  validation2: true,  status: "pending",  emailSent: false },
-  { id: 8,  report: "Equipment Maintenance Log",                 uploadedDate: "03-03-2026", resourceType: "ESR",  customer: "Next Level Blending LLC",       asset: "Plant C-7",           validation1: true,  validation2: false, status: "rejected", rejectNote: "Missing asset ID on page 3.", emailSent: false },
-  { id: 9,  report: "Energy Trading Summary",                    uploadedDate: "03-02-2026", resourceType: "GEN",  customer: "Wild Duck Bar & Grill LLC",     asset: "Commercial Unit",     validation1: true,  validation2: true,  status: "approved", emailSent: true  },
-  { id: 10, report: "Ancillary Services Report - Feb 2026",      uploadedDate: "03-01-2026", resourceType: "NCLR", customer: "Lone Star Energy Partners",     asset: "Substation Alpha-4",  validation1: true,  validation2: true,  status: "approved", emailSent: true  },
-  { id: 11, report: "Reactive Power Compensation Log",           uploadedDate: "02-28-2026", resourceType: "ESR",  customer: "Rio Grande Grid LLC",           asset: "Capacitor Bank 7",    validation1: true,  validation2: false, status: "pending",  emailSent: false },
-  { id: 12, report: "Voltage Regulation Monthly Summary",        uploadedDate: "02-27-2026", resourceType: "GEN",  customer: "Texas Energy Co.",             asset: "Wind Farm Alpha",     validation1: true,  validation2: true,  status: "approved", emailSent: true  },
-  { id: 13, report: "Transmission Constraint Analysis",          uploadedDate: "02-26-2026", resourceType: "NCLR", customer: "Coastal Wind & Solar LLC",      asset: "Offshore Platform 2", validation1: false, validation2: false, status: "rejected", rejectNote: "Constraint assumptions do not match ERCOT published data.", emailSent: false },
-  { id: 14, report: "Renewable Integration Assessment Q4",       uploadedDate: "02-25-2026", resourceType: "ESR",  customer: "Midwest Industrial",            asset: "Plant B-12",          validation1: true,  validation2: true,  status: "pending",  emailSent: false },
-  { id: 15, report: "Frequency Response Event Log",              uploadedDate: "02-24-2026", resourceType: "GEN",  customer: "Gulf Coast Power",              asset: "Gas Turbine Unit 3",  validation1: true,  validation2: true,  status: "approved", emailSent: false },
-  { id: 16, report: "Spinning Reserve Activation Report",        uploadedDate: "02-23-2026", resourceType: "NCLR", customer: "Commercial Partners LLC",        asset: "Portfolio C",         validation1: true,  validation2: false, status: "pending",  emailSent: false },
-  { id: 17, report: "Power Quality Incident Summary",            uploadedDate: "02-22-2026", resourceType: "ESR",  customer: "Next Level Blending LLC",       asset: "Plant C-7",           validation1: true,  validation2: true,  status: "approved", emailSent: true  },
-  { id: 18, report: "ERCOT COP Submission Audit",                uploadedDate: "02-21-2026", resourceType: "GEN",  customer: "Molinas Enterprises Inc",       asset: "Facility East",       validation1: true,  validation2: true,  status: "pending",  emailSent: false },
-  { id: 19, report: "Load Shed Event Documentation",             uploadedDate: "02-20-2026", resourceType: "NCLR", customer: "White Realty Management, Inc.", asset: "Portfolio A",         validation1: false, validation2: false, status: "pending",  emailSent: false },
-  { id: 20, report: "Annual Reliability Performance Report",     uploadedDate: "02-19-2026", resourceType: "ESR",  customer: "Wild Duck Bar & Grill LLC",     asset: "Commercial Unit",     validation1: true,  validation2: true,  status: "approved", emailSent: true  },
+  { id: 1,  report: "Daily Generation Summary - March 2026",     uploadedDate: "03-10-2026", resourceType: "NCLR", customer: "Texas Energy Co.",             asset: "Wind Farm Alpha",      status: "approved", emailSent: true  },
+  { id: 2,  report: "Load Forecast Analysis Q1",                 uploadedDate: "03-09-2026", resourceType: "ESR",  customer: "Midwest Industrial",            asset: "Plant B-12",           status: "approved", emailSent: true  },
+  { id: 3,  report: "Demand Response Event Report",              uploadedDate: "03-08-2026", resourceType: "GEN",  customer: "Commercial Partners LLC",        asset: "Portfolio C",         status: "pending",  emailSent: false },
+  { id: 4,  report: "ERCOT Settlement Data Feb 2026",            uploadedDate: "03-07-2026", resourceType: "NCLR", customer: "Texas Energy Co.",             asset: "Solar Array Delta",    status: "approved", emailSent: true  },
+  { id: 5,  report: "Outage Impact Assessment",                  uploadedDate: "03-06-2026", resourceType: "ESR",  customer: "Gulf Coast Power",              asset: "Gas Turbine Unit 3",  status: "pending",  emailSent: false },
+  { id: 6,  report: "Monthly Performance Review",                uploadedDate: "03-05-2026", resourceType: "GEN",  customer: "White Realty Management, Inc.", asset: "Portfolio A",          status: "approved", emailSent: false },
+  { id: 7,  report: "Compliance Audit Report",                   uploadedDate: "03-04-2026", resourceType: "NCLR", customer: "Molinas Enterprises Inc",       asset: "Facility East",        status: "pending",  emailSent: false },
+  { id: 8,  report: "Equipment Maintenance Log",                 uploadedDate: "03-03-2026", resourceType: "ESR",  customer: "Next Level Blending LLC",       asset: "Plant C-7",           status: "rejected", rejectNote: "Missing asset ID on page 3.", emailSent: false },
+  { id: 9,  report: "Energy Trading Summary",                    uploadedDate: "03-02-2026", resourceType: "GEN",  customer: "Wild Duck Bar & Grill LLC",     asset: "Commercial Unit",      status: "approved", emailSent: true  },
+  { id: 10, report: "Ancillary Services Report - Feb 2026",      uploadedDate: "03-01-2026", resourceType: "NCLR", customer: "Lone Star Energy Partners",     asset: "Substation Alpha-4",   status: "approved", emailSent: true  },
+  { id: 11, report: "Reactive Power Compensation Log",           uploadedDate: "02-28-2026", resourceType: "ESR",  customer: "Rio Grande Grid LLC",           asset: "Capacitor Bank 7",    status: "pending",  emailSent: false },
+  { id: 12, report: "Voltage Regulation Monthly Summary",        uploadedDate: "02-27-2026", resourceType: "GEN",  customer: "Texas Energy Co.",             asset: "Wind Farm Alpha",      status: "approved", emailSent: true  },
+  { id: 13, report: "Transmission Constraint Analysis",          uploadedDate: "02-26-2026", resourceType: "NCLR", customer: "Coastal Wind & Solar LLC",      asset: "Offshore Platform 2", status: "rejected", rejectNote: "Constraint assumptions do not match ERCOT published data.", emailSent: false },
+  { id: 14, report: "Renewable Integration Assessment Q4",       uploadedDate: "02-25-2026", resourceType: "ESR",  customer: "Midwest Industrial",            asset: "Plant B-12",           status: "pending",  emailSent: false },
+  { id: 15, report: "Frequency Response Event Log",              uploadedDate: "02-24-2026", resourceType: "GEN",  customer: "Gulf Coast Power",              asset: "Gas Turbine Unit 3",   status: "approved", emailSent: false },
+  { id: 16, report: "Spinning Reserve Activation Report",        uploadedDate: "02-23-2026", resourceType: "NCLR", customer: "Commercial Partners LLC",        asset: "Portfolio C",         status: "pending",  emailSent: false },
+  { id: 17, report: "Power Quality Incident Summary",            uploadedDate: "02-22-2026", resourceType: "ESR",  customer: "Next Level Blending LLC",       asset: "Plant C-7",            status: "approved", emailSent: true  },
+  { id: 18, report: "ERCOT COP Submission Audit",                uploadedDate: "02-21-2026", resourceType: "GEN",  customer: "Molinas Enterprises Inc",       asset: "Facility East",        status: "pending",  emailSent: false },
+  { id: 19, report: "Load Shed Event Documentation",             uploadedDate: "02-20-2026", resourceType: "NCLR", customer: "White Realty Management, Inc.", asset: "Portfolio A",         status: "pending",  emailSent: false },
+  { id: 20, report: "Annual Reliability Performance Report",     uploadedDate: "02-19-2026", resourceType: "ESR",  customer: "Wild Duck Bar & Grill LLC",     asset: "Commercial Unit",      status: "approved", emailSent: true  },
 ]
 
 const assetResourceTypeMap: Record<string, string> = {
@@ -393,16 +393,6 @@ export default function RealTimeOperationsPage() {
   )
   const typeBody       = (row: Report) => <TypePill type={row.resourceType} />
   const statusBody     = (row: Report) => <ReportStatusSteps report={row} />
-  const validationBody = (row: Report) => (
-    <div style={{ display: "flex", gap: 8 }}>
-      {[row.validation1, row.validation2].map((v, i) => (
-        <span key={i} title={`Validation ${i + 1}`}>
-          {v ? <i className="pi pi-check" style={{ fontSize: 12, color: "#2d7a2d" }} />
-             : <span style={{ color: "var(--text-color-secondary)", fontSize: 12 }}>—</span>}
-        </span>
-      ))}
-    </div>
-  )
   const actionsBody = (row: Report) => (
     <div style={{ display: "flex", gap: 1 }} onClick={e => e.stopPropagation()}>
       <button onClick={() => { setPreviewReportId(prev => prev === row.id ? null : row.id); setPdfPage(1) }} title="Preview"
@@ -609,7 +599,6 @@ export default function RealTimeOperationsPage() {
                 <Column field="report"          header="Report"       sortable style={{ minWidth: 160 }} />
                 <Column field="uploadedDate"    header="Uploaded"     sortable style={{ width: 100 }} />
                 <Column header="Type"           body={typeBody}       style={{ width: 66 }} />
-                <Column header="Validation"     body={validationBody} style={{ width: 80 }} />
                 <Column header="Status"         body={statusBody}     style={{ width: 100 }} />
                 <Column header=""               body={actionsBody}    style={{ width: 70 }} />
               </DataTable>
