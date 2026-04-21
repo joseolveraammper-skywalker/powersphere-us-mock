@@ -193,23 +193,121 @@ export function Sidebar() {
         </ul>
       </nav>
 
-      {/* Footer */}
-      <div style={{
-        padding: "0.625rem 0.875rem",
-        borderTop: BORDER,
-        display: "flex", alignItems: "center", gap: 8,
-      }}>
-        <div style={{
-          width: 26, height: 26, borderRadius: 6,
-          background: "var(--surface-section)",
-          border: BORDER,
-          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-        }}>
-          <i className="pi pi-user" style={{ fontSize: 11, color: "var(--text-color-secondary)" }} />
+      {/* Bottom section */}
+      <div style={{ borderTop: BORDER }}>
+
+        {/* Branding */}
+        <div style={{ padding: "0.5rem 0.75rem", borderBottom: BORDER }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Image
+              src="/powersphere-logo-icon.png"
+              alt="Ammper"
+              width={28}
+              height={28}
+              style={{ width: 28, height: 28, objectFit: "contain", flexShrink: 0 }}
+              onError={(e) => {
+                const target = e.currentTarget as HTMLImageElement
+                target.style.display = "none"
+                const fallback = target.nextElementSibling as HTMLElement
+                if (fallback) fallback.style.display = "flex"
+              }}
+            />
+            <i className="pi pi-compass" style={{ fontSize: 16, color: "#cc1111", display: "none", flexShrink: 0 }} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: "#cc1111", fontStyle: "italic" }}>
+              Empowering Businesses
+            </span>
+          </div>
         </div>
-        <span style={{ fontSize: 11, color: "var(--text-color-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          admin@powersphere.com
-        </span>
+
+        {/* Actions */}
+        <div style={{ padding: "0.375rem 0.5rem", borderBottom: BORDER, display: "flex", flexDirection: "column", gap: 1 }}>
+          {/* Contact Us */}
+          <button style={{
+            width: "100%", display: "flex", alignItems: "center", gap: 8,
+            padding: "0.4rem 0.625rem", borderRadius: 6,
+            border: "none", cursor: "pointer", background: "transparent",
+            color: "var(--text-color-secondary)",
+          }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "var(--surface-hover)" }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent" }}
+          >
+            <i className="pi pi-id-card" style={{ fontSize: 12, width: 14, textAlign: "center", flexShrink: 0 }} />
+            <span style={{ fontSize: 12 }}>Contact Us</span>
+          </button>
+
+          {/* Language */}
+          <button style={{
+            width: "100%", display: "flex", alignItems: "center", gap: 8,
+            padding: "0.4rem 0.625rem", borderRadius: 6,
+            border: "none", cursor: "pointer", background: "transparent",
+            color: "var(--text-color-secondary)",
+          }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "var(--surface-hover)" }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent" }}
+          >
+            <span style={{ fontSize: 12, width: 14, textAlign: "center", flexShrink: 0 }}>🇺🇸</span>
+            <span style={{ fontSize: 12 }}>English</span>
+          </button>
+
+          {/* Logout */}
+          <button style={{
+            width: "100%", display: "flex", alignItems: "center", gap: 8,
+            padding: "0.4rem 0.625rem", borderRadius: 6,
+            border: "none", cursor: "pointer", background: "transparent",
+            color: "var(--text-color-secondary)",
+          }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "var(--surface-hover)" }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent" }}
+          >
+            <i className="pi pi-sign-out" style={{ fontSize: 12, width: 14, textAlign: "center", flexShrink: 0 }} />
+            <span style={{ fontSize: 12 }}>Logout</span>
+          </button>
+        </div>
+
+        {/* Privacy Notice + Dev Docs */}
+        <div style={{ padding: "0.4rem 1.25rem", display: "flex", flexDirection: "column", gap: 3 }}>
+          <button style={{
+            background: "none", border: "none", cursor: "pointer", padding: 0,
+            fontSize: 11, color: "var(--text-color-secondary)",
+            textDecoration: "underline", textDecorationStyle: "dotted",
+            textAlign: "left",
+          }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = "var(--text-color)" }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = "var(--text-color-secondary)" }}
+          >
+            Privacy Notice
+          </button>
+          <button style={{
+            background: "none", border: "none", cursor: "pointer", padding: 0,
+            fontSize: 11, color: "var(--text-color-secondary)",
+            textDecoration: "underline", textDecorationStyle: "dotted",
+            textAlign: "left",
+          }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = "var(--text-color)" }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = "var(--text-color-secondary)" }}
+          >
+            Developer Documentation
+          </button>
+        </div>
+
+        {/* User footer */}
+        <div style={{
+          padding: "0.5rem 0.875rem",
+          borderTop: BORDER,
+          display: "flex", alignItems: "center", gap: 8,
+        }}>
+          <div style={{
+            width: 26, height: 26, borderRadius: 6,
+            background: "var(--surface-section)",
+            border: BORDER,
+            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+          }}>
+            <i className="pi pi-user" style={{ fontSize: 11, color: "var(--text-color-secondary)" }} />
+          </div>
+          <span style={{ fontSize: 11, color: "var(--text-color-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            admin@powersphere.com
+          </span>
+        </div>
       </div>
     </aside>
   )

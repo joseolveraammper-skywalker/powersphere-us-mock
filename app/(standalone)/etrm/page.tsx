@@ -263,6 +263,282 @@ function StatusIcon({ value, type, tooltip }: { value: boolean | ApprovalStatus 
   return <ClickTooltip text={tooltip}>{icon}</ClickTooltip>
 }
 
+// ── M2M data & component ─────────────────────────────────────────────────────
+type M2MRow = {
+  id: string; counterparty: string; totalMtm: number; mwh: number
+  dollarPerMwh: number; sleeveFee: number; priorMonthSettlement: number
+  currentMonthNotional: number; m2mPlusCurrentMonth: number; percentage: number
+  hasWarning?: boolean
+}
+
+const M2M_ROWS: M2MRow[] = [
+  { id: "m-edf",    counterparty: "EDF",           totalMtm: -289989.94,   mwh: 38114,   dollarPerMwh: -7.61, sleeveFee: 0,    priorMonthSettlement: 78223.04,   currentMonthNotional: 75801.6,   m2mPlusCurrentMonth: -365791.54,  percentage: 2.31  },
+  { id: "m-engie",  counterparty: "ENGIE",          totalMtm: -976679.16,  mwh: 1386282, dollarPerMwh: -0.7,  sleeveFee: -240, priorMonthSettlement: 134331.5,   currentMonthNotional: 168706,    m2mPlusCurrentMonth: -1145385.16, percentage: 7.24  },
+  { id: "m-vistra", counterparty: "VISTRA",         totalMtm: 1434772.79,  mwh: 1567195, dollarPerMwh: 0.92,  sleeveFee: 0,    priorMonthSettlement: 1293258.37, currentMonthNotional: 1253224.8, m2mPlusCurrentMonth: 181547.99,   percentage: -1.15 },
+  { id: "m-axpo",   counterparty: "AXPO",           totalMtm: -917761.86,  mwh: 862040,  dollarPerMwh: -1.06, sleeveFee: 0,    priorMonthSettlement: 28048.25,   currentMonthNotional: 27180,     m2mPlusCurrentMonth: -944941.86,  percentage: 5.97, hasWarning: true },
+  { id: "m-shell",  counterparty: "SHELL",          totalMtm: -1669241.56, mwh: 1571434, dollarPerMwh: -1.06, sleeveFee: 0,    priorMonthSettlement: 183760.8,   currentMonthNotional: 178820.8,  m2mPlusCurrentMonth: -1848062.36, percentage: 11.68 },
+  { id: "m-citadel",counterparty: "CITADEL",        totalMtm: -3242056.9,  mwh: 409840,  dollarPerMwh: -7.91, sleeveFee: 0,    priorMonthSettlement: 0,          currentMonthNotional: 0,         m2mPlusCurrentMonth: -3242056.9,  percentage: 20.49 },
+  { id: "m-merc",   counterparty: "Mercuria (MEA)", totalMtm: -7380395.6,  mwh: 4091715, dollarPerMwh: -1.8,  sleeveFee: 0,    priorMonthSettlement: 832634.5,   currentMonthNotional: 806940,    m2mPlusCurrentMonth: -8187335.6,  percentage: 51.75 },
+  { id: "m-tote",   counterparty: "TOTAL ENERGIES", totalMtm: -268593.72,  mwh: 152340,  dollarPerMwh: -1.76, sleeveFee: 0,    priorMonthSettlement: 0,          currentMonthNotional: 0,         m2mPlusCurrentMonth: -268593.72,  percentage: 1.7   },
+]
+
+const M2M_TOTAL_ROW: M2MRow = {
+  id: "m-total", counterparty: "TOTAL",
+  totalMtm: -13309945.95, mwh: 10078960, dollarPerMwh: -1.32, sleeveFee: -240,
+  priorMonthSettlement: 2550256.46, currentMonthNotional: 2510673.2,
+  m2mPlusCurrentMonth: -15820619.15, percentage: 100,
+}
+
+const M2M_ALL_CPS    = M2M_ROWS.map(r => r.counterparty)
+const M2M_COMMODITIES = ["Ancillary Services", "Gas", "Energy"]
+const M2M_CURVES     = ["AMMPER", "ERCOT", "SPP", "MISO"]
+const M2M_EOD_DATES  = [
+  "EOD : 2026-04-20 (Uploaded On: 2026-04-20 14:58:49)",
+  "EOD : 2026-04-19 (Uploaded On: 2026-04-19 14:30:22)",
+]
+
+function fmtM2M(n: number): string {
+  if (n === 0) return "$ 0"
+  const abs = Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 2 })
+  return n < 0 ? `$ -${abs}` : `$ ${abs}`
+}
+
+function ETRMMarkToMarket() {
+  const [promptMonth, setPromptMonth] = useState("2026-05-01")
+  const [selectedCPs, setSelectedCPs] = useState<string[]>(M2M_ALL_CPS)
+  const [selectedComs, setSelectedComs] = useState<string[]>(M2M_COMMODITIES)
+  const [curve, setCurve] = useState("AMMPER")
+  const [eodDate, setEodDate] = useState(M2M_EOD_DATES[0])
+  const [tableFilter, setTableFilter] = useState("")
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+
+  const toggleCP  = (cp: string) => setSelectedCPs(prev => prev.includes(cp) ? prev.filter(x => x !== cp) : [...prev, cp])
+  const toggleCom = (c: string)  => setSelectedComs(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c])
+  const toggleRow = (id: string) => setExpandedRows(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+
+  const visibleRows = M2M_ROWS.filter(r =>
+    selectedCPs.includes(r.counterparty) &&
+    (tableFilter === "" || r.counterparty.toLowerCase().includes(tableFilter.toLowerCase()))
+  )
+
+  const mThStyle: React.CSSProperties = {
+    fontSize: 11, fontWeight: 600, padding: "10px 16px", textAlign: "right",
+    color: "var(--text-color-secondary)", borderBottom: BORDER,
+    background: "var(--surface-section)", whiteSpace: "nowrap",
+  }
+  const mTdStyle: React.CSSProperties = { fontSize: 12, padding: "12px 16px", textAlign: "right", borderBottom: BORDER }
+
+  const MoneyV = ({ n }: { n: number }) => (
+    <span style={{ color: n < 0 ? "#dc2626" : "var(--text-color)" }}>{fmtM2M(n)}</span>
+  )
+  const PctV = ({ n }: { n: number }) => (
+    <span style={{ color: n < 0 ? "#dc2626" : "var(--text-color)" }}>{n.toFixed(2)}%</span>
+  )
+
+  const renderTableRow = (row: M2MRow, isTotal = false) => {
+    const isExp = expandedRows.has(row.id)
+    return (
+      <React.Fragment key={row.id}>
+        <tr
+          style={{ background: isTotal ? "var(--surface-section)" : "var(--surface-card)", cursor: isTotal ? "default" : "pointer" }}
+          onClick={() => { if (!isTotal) toggleRow(row.id) }}
+        >
+          <td style={{ ...mTdStyle, width: 40, textAlign: "center" }}>
+            {!isTotal && (
+              <i className={`pi pi-chevron-${isExp ? "down" : "right"}`} style={{ fontSize: 10, color: "var(--text-color-secondary)" }} />
+            )}
+          </td>
+          <td style={{ ...mTdStyle, textAlign: "left", fontWeight: isTotal ? 700 : 400 }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              {row.counterparty}
+              {row.hasWarning && <i className="pi pi-exclamation-circle" style={{ fontSize: 12, color: "#dc2626" }} />}
+            </span>
+          </td>
+          <td style={mTdStyle}><MoneyV n={row.totalMtm} /></td>
+          <td style={mTdStyle}>{row.mwh.toLocaleString("en-US")}</td>
+          <td style={mTdStyle}><MoneyV n={row.dollarPerMwh} /></td>
+          <td style={mTdStyle}><MoneyV n={row.sleeveFee} /></td>
+          <td style={mTdStyle}><MoneyV n={row.priorMonthSettlement} /></td>
+          <td style={mTdStyle}><MoneyV n={row.currentMonthNotional} /></td>
+          <td style={mTdStyle}><MoneyV n={row.m2mPlusCurrentMonth} /></td>
+          <td style={{ ...mTdStyle }}><PctV n={row.percentage} /></td>
+        </tr>
+        {isExp && (
+          <tr>
+            <td colSpan={10} style={{ background: "var(--surface-section)", padding: "12px 24px", borderBottom: BORDER }}>
+              <span style={{ fontSize: 12, color: "var(--text-color-secondary)", fontStyle: "italic" }}>
+                Contract details for {row.counterparty} — coming soon
+              </span>
+            </td>
+          </tr>
+        )}
+      </React.Fragment>
+    )
+  }
+
+  return (
+    <div>
+      {/* Row 1: Prompt Month | Counterparty | Commodity | Curve */}
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 20, marginBottom: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <label style={{ fontSize: 10, fontWeight: 500, color: "var(--text-color-secondary)" }}>Prompt Month</label>
+          <input type="date" value={promptMonth} onChange={e => setPromptMonth(e.target.value)}
+            style={{ ...nativeInput, width: 148 }} />
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <label style={{ fontSize: 10, fontWeight: 500, color: "var(--text-color-secondary)" }}>Counterparty</label>
+          <div style={{
+            display: "flex", alignItems: "center", flexWrap: "wrap", gap: 4,
+            border: BORDER, borderRadius: 6, padding: "3px 6px",
+            background: "var(--surface-card)", minHeight: CTRL_H, maxWidth: 600,
+          }}>
+            {selectedCPs.map(cp => (
+              <span key={cp} style={{
+                display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 7px",
+                borderRadius: 12, fontSize: 11, background: "var(--surface-section)",
+                color: "var(--text-color)", border: BORDER,
+              }}>
+                {cp}
+                <button onClick={e => { e.stopPropagation(); toggleCP(cp) }}
+                  style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--text-color-secondary)", display: "inline-flex", lineHeight: 1 }}>
+                  <i className="pi pi-times" style={{ fontSize: 8 }} />
+                </button>
+              </span>
+            ))}
+            <i className="pi pi-chevron-down" style={{ fontSize: 9, color: "var(--text-color-secondary)", marginLeft: 2 }} />
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <label style={{ fontSize: 10, fontWeight: 500, color: "var(--text-color-secondary)" }}>Commodity</label>
+          <div style={{
+            display: "flex", alignItems: "center", flexWrap: "wrap", gap: 4,
+            border: BORDER, borderRadius: 6, padding: "3px 6px",
+            background: "var(--surface-card)", minHeight: CTRL_H,
+          }}>
+            {selectedComs.map(c => (
+              <span key={c} style={{
+                display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 7px",
+                borderRadius: 12, fontSize: 11, background: "var(--surface-section)",
+                color: "var(--text-color)", border: BORDER,
+              }}>
+                {c}
+                <button onClick={e => { e.stopPropagation(); toggleCom(c) }}
+                  style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--text-color-secondary)", display: "inline-flex", lineHeight: 1 }}>
+                  <i className="pi pi-times" style={{ fontSize: 8 }} />
+                </button>
+              </span>
+            ))}
+            <i className="pi pi-chevron-down" style={{ fontSize: 9, color: "var(--text-color-secondary)", marginLeft: 2 }} />
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <label style={{ fontSize: 10, fontWeight: 500, color: "var(--text-color-secondary)" }}>Curve</label>
+          <select value={curve} onChange={e => setCurve(e.target.value)} style={{ ...nativeSelect, width: 120 }}>
+            {M2M_CURVES.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* Row 2: Effective Dates | Hourly F. | action buttons */}
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 16, marginBottom: 20, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <label style={{ fontSize: 10, fontWeight: 500, color: "var(--text-color-secondary)" }}>Effective Dates</label>
+          <select value={eodDate} onChange={e => setEodDate(e.target.value)}
+            style={{ ...nativeSelect, width: 340, fontSize: 11 }}>
+            {M2M_EOD_DATES.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
+        </div>
+
+        <div style={{
+          display: "inline-flex", alignItems: "center", gap: 6, padding: "0 12px",
+          border: BORDER, borderRadius: 20, height: CTRL_H, fontSize: 11,
+          color: "var(--text-color)", background: "var(--surface-card)",
+        }}>
+          Hourly F.: 2026-01-30
+          <i className="pi pi-info-circle" style={{ fontSize: 11, color: "var(--text-color-secondary)" }} />
+        </div>
+
+        <div style={{ flex: 1 }} />
+
+        <button style={{
+          width: 34, height: 34, display: "inline-flex", alignItems: "center", justifyContent: "center",
+          border: "1px solid #cc1111", borderRadius: 6, background: "none", cursor: "pointer",
+        }}>
+          <i className="pi pi-play-circle" style={{ fontSize: 15, color: "#cc1111" }} />
+        </button>
+        <button style={{
+          width: 34, height: 34, display: "inline-flex", alignItems: "center", justifyContent: "center",
+          border: "1px solid #16a34a", borderRadius: 6, background: "none", cursor: "pointer",
+        }}>
+          <i className="pi pi-file-excel" style={{ fontSize: 15, color: "#16a34a" }} />
+        </button>
+      </div>
+
+      <div style={{ borderTop: BORDER, marginBottom: 14 }} />
+
+      {/* Filter search */}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+        <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+          <input value={tableFilter} onChange={e => setTableFilter(e.target.value)}
+            placeholder="Filter..."
+            style={{ ...nativeInput, width: 200, paddingRight: 28 }} />
+          <i className="pi pi-search" style={{
+            position: "absolute", right: 9, fontSize: 11,
+            color: "var(--text-color-secondary)", pointerEvents: "none",
+          }} />
+        </div>
+      </div>
+
+      {/* Table */}
+      <div style={{ border: BORDER, borderRadius: 12, overflow: "hidden" }}>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 960 }}>
+            <colgroup>
+              <col style={{ width: 40 }} />
+              <col style={{ width: 160 }} />
+              <col /><col /><col /><col />
+              <col style={{ width: 160 }} />
+              <col style={{ width: 160 }} />
+              <col style={{ width: 160 }} />
+              <col style={{ width: 90 }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th style={{ ...mThStyle, textAlign: "center" }} />
+                <th style={{ ...mThStyle, textAlign: "left" }}>Counterparty</th>
+                <th style={mThStyle}>Total MTM</th>
+                <th style={mThStyle}>MWh</th>
+                <th style={mThStyle}>$/MWh</th>
+                <th style={mThStyle}>Sleeve Fee</th>
+                <th style={mThStyle}>
+                  <div>Prior Month Settlement</div>
+                  <div style={{ fontSize: 10, fontWeight: 400, marginTop: 2 }}>2026-03-01</div>
+                </th>
+                <th style={mThStyle}>
+                  <div>Current Month Notional</div>
+                  <div style={{ fontSize: 10, fontWeight: 400, marginTop: 2 }}>2026-04-01</div>
+                </th>
+                <th style={mThStyle}>
+                  <div>M2M + Current Month</div>
+                  <div style={{ fontSize: 10, fontWeight: 400, marginTop: 2 }}>2026-05-01</div>
+                </th>
+                <th style={mThStyle}>Percentage</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleRows.map(row => renderTableRow(row))}
+              {renderTableRow(M2M_TOTAL_ROW, true)}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── ETRM Reports ──────────────────────────────────────────────────────────────
 function ETRMReports() {
   const [reportChip, setReportChip] = useState<"m2m" | "settlement" | "credit">("settlement")
@@ -440,7 +716,7 @@ function ETRMReports() {
 
   const dataVisCols   = SETTLEMENT_COLS.filter(c => !c.required && visibleCols.has(c.key))
   const statusVisCols = SETTLEMENT_COLS.filter(c => c.required)
-  const visCols = [...dataVisCols, ...statusVisCols]
+
   const VAL_COL_W = 90
   const valCols = [
     { key: "val_mw",    label: "Total MW"  },
@@ -580,9 +856,10 @@ function ETRMReports() {
         ))}
       </div>
 
-      {(reportChip === "m2m" || reportChip === "credit") && (
+      {reportChip === "m2m" && <ETRMMarkToMarket />}
+      {reportChip === "credit" && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 160, fontSize: 13, color: "var(--text-color-secondary)" }}>
-          {reportChip === "m2m" ? "Mark to Market" : "Credit & Collateral"} — coming soon
+          Credit &amp; Collateral — coming soon
         </div>
       )}
 
