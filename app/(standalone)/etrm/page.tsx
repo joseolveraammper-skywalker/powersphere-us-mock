@@ -5,7 +5,6 @@ import { DashboardLayout } from "@/components/power-sphere/dashboard-layout"
 import { DataTable } from "primereact/datatable"
 import { Column } from "primereact/column"
 import { Dialog } from "primereact/dialog"
-import type { DataTableExpandedRows } from "primereact/datatable"
 import { useCounterparties } from "@/lib/counterparty-context"
 import { ETRM_INVOICE_DATA } from "@/lib/etrm-invoice-mock"
 
@@ -29,16 +28,6 @@ const btnSecondary: React.CSSProperties = {
   padding: "0.35rem 0.875rem", color: "var(--text-color)", cursor: "pointer",
   display: "inline-flex", alignItems: "center", gap: 6,
 }
-const btnSuccess: React.CSSProperties = {
-  background: "#2d7a2d", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600,
-  padding: "0.35rem 0.875rem", color: "#fff", cursor: "pointer",
-  display: "inline-flex", alignItems: "center", gap: 6,
-}
-const btnDanger: React.CSSProperties = {
-  background: "none", border: "1px solid #dc2626", borderRadius: 6, fontSize: 12, fontWeight: 600,
-  padding: "0.35rem 0.875rem", color: "#dc2626", cursor: "pointer",
-  display: "inline-flex", alignItems: "center", gap: 6,
-}
 const thStyle: React.CSSProperties = {
   fontSize: 11, fontWeight: 600, padding: "8px 12px",
   background: "var(--surface-section)", color: "var(--text-color-secondary)",
@@ -51,7 +40,8 @@ type Trade = {
   id: string; tradeName: string; tradeDate: string; tradeType: string; commodity: string
   qse: string; duns: string; portfolio: string; productType: string; strategy: string
   counterParty: string; sleeveCounterparty: string; broker: string; brokerageFee: string
-  brokerageFeeUom: string; status: "Draft" | "Pending Approval" | "Approved" | "Rejected"
+  brokerageFeeUom: string; peakPeriod: string
+  status: "Draft" | "Pending Approval" | "Approved" | "Rejected"
   documents?: UploadedDocument[]
 }
 
@@ -64,18 +54,26 @@ const PRODUCT_TYPE_OPTIONS = ["Day Ahead", "Real Time", "Term", "Balancing"]
 const STRATEGY_OPTIONS = ["Arbitrage", "Hedging", "Speculation", "Market Making"]
 const BROKER_OPTIONS = ["Tradition", "ICAP", "BGC", "GFI", "Tullett Prebon"]
 const BROKERAGE_FEE_UOM_OPTIONS = ["$/MWh", "$/MMBtu", "Flat Fee", "% of Notional"]
+const PEAK_PERIOD_OPTIONS = ["5x16", "7x24", "Wrap", "TB2-7x24", "2x16", "7x16", "7x8", "1x1x7", "1x1x2", "1x1x5", "N/A"]
 
-function generateTradeName(tradeDate: string, seq: number): string {
-  const parts = tradeDate.split("-")
-  if (parts.length !== 3) return `- - - - ${tradeDate} - ${tradeDate} - - - - ${String(seq).padStart(3, "0")}`
-  const d = `${parts[1]}/${parts[2]}/${parts[0]}`
-  return `- - - - ${d} - ${d} - - - - ${String(seq).padStart(3, "0")}`
+const TRADE_TYPE_ABBR: Record<string, string> = {
+  Physical: "PHY", Financial: "FIN", Option: "OPT", Swap: "SWP", Forward: "FWD",
+}
+
+function generateTradeName(params: { counterParty: string; tradeType: string; peakPeriod: string; tradeDate: string; qse: string; seq: number }): string {
+  const { counterParty, tradeType, peakPeriod, tradeDate, qse, seq } = params
+  const cp   = counterParty || "???"
+  const type = TRADE_TYPE_ABBR[tradeType] || tradeType || "???"
+  const peak = peakPeriod || "???"
+  const date = tradeDate || "????"
+  const q    = qse || "???"
+  return `${cp}-${type}-${peak}-${date}-${q} - Ammper Power-${String(seq).padStart(3, "0")}`
 }
 
 const initialTrades: Trade[] = [
-  { id: "1", tradeName: "- - - - 03/20/2026 - 03/20/2026 - - - - 001", tradeDate: "2026-03-20", tradeType: "Physical", commodity: "Power", qse: "QSE-001", duns: "123456789", portfolio: "Trading Book A", productType: "Day Ahead", strategy: "Arbitrage", counterParty: "EDF", sleeveCounterparty: "", broker: "Tradition", brokerageFee: "0.05", brokerageFeeUom: "$/MWh", status: "Approved" },
-  { id: "2", tradeName: "- - - - 03/22/2026 - 03/22/2026 - - - - 002", tradeDate: "2026-03-22", tradeType: "Financial", commodity: "Natural Gas", qse: "QSE-002", duns: "987654321", portfolio: "Hedging Portfolio", productType: "Term", strategy: "Hedging", counterParty: "SHELL", sleeveCounterparty: "ENGIE", broker: "ICAP", brokerageFee: "0.02", brokerageFeeUom: "$/MMBtu", status: "Pending Approval" },
-  { id: "3", tradeName: "- - - - 03/24/2026 - 03/24/2026 - - - - 003", tradeDate: "2026-03-24", tradeType: "Swap", commodity: "Power", qse: "QSE-003", duns: "456789123", portfolio: "Trading Book B", productType: "Real Time", strategy: "Market Making", counterParty: "VISTRA", sleeveCounterparty: "", broker: "BGC", brokerageFee: "100", brokerageFeeUom: "Flat Fee", status: "Draft" },
+  { id: "1", tradeName: "EDF-PHY-7x24-2026-03-20-QSE-001 - Ammper Power-001", tradeDate: "2026-03-20", tradeType: "Physical", commodity: "Power", qse: "QSE-001", duns: "123456789", portfolio: "Trading Book A", productType: "Day Ahead", strategy: "Arbitrage", counterParty: "EDF", sleeveCounterparty: "", broker: "Tradition", brokerageFee: "0.05", brokerageFeeUom: "$/MWh", peakPeriod: "7x24", status: "Approved" },
+  { id: "2", tradeName: "SHELL-FIN-5x16-2026-03-22-QSE-002 - Ammper Power-002", tradeDate: "2026-03-22", tradeType: "Financial", commodity: "Natural Gas", qse: "QSE-002", duns: "987654321", portfolio: "Hedging Portfolio", productType: "Term", strategy: "Hedging", counterParty: "SHELL", sleeveCounterparty: "ENGIE", broker: "ICAP", brokerageFee: "0.02", brokerageFeeUom: "$/MMBtu", peakPeriod: "5x16", status: "Pending Approval" },
+  { id: "3", tradeName: "VISTRA-SWP-7x8-2026-03-24-QSE-003 - Ammper Power-003", tradeDate: "2026-03-24", tradeType: "Swap", commodity: "Power", qse: "QSE-003", duns: "456789123", portfolio: "Trading Book B", productType: "Real Time", strategy: "Market Making", counterParty: "VISTRA", sleeveCounterparty: "", broker: "BGC", brokerageFee: "100", brokerageFeeUom: "Flat Fee", peakPeriod: "7x8", status: "Draft" },
 ]
 
 // ── Sub-components ───────────────────────────────────────────────────────────
@@ -1253,7 +1251,7 @@ export default function ETRMPage() {
   }, [activeCounterparties])
 
   const [mainTab, setMainTab] = useState<"reports" | "st">("st")
-  const [subChip, setSubChip] = useState<"trades" | "deal-entry" | "approvals" | "upload">("deal-entry")
+  const [subChip, setSubChip] = useState<"trades" | "deal-entry" | "upload">("deal-entry")
 
   // Form state
   const [tradeDate, setTradeDate] = useState(() => new Date().toISOString().split("T")[0])
@@ -1269,28 +1267,39 @@ export default function ETRMPage() {
   const [broker, setBroker] = useState("")
   const [brokerageFee, setBrokerageFee] = useState("")
   const [brokerageFeeUom, setBrokerageFeeUom] = useState("")
+  const [peakPeriod, setPeakPeriod] = useState("")
 
   const [trades, setTrades] = useState<Trade[]>(initialTrades)
-  const [expandedTradeRows, setExpandedTradeRows] = useState<DataTableExpandedRows>({})
+  const [expandedTradeIds, setExpandedTradeIds] = useState<Set<string>>(new Set())
+  const [selectedTradeIds, setSelectedTradeIds] = useState<Set<string>>(new Set())
+  const [tradeFilterDateFrom, setTradeFilterDateFrom] = useState("")
+  const [tradeFilterDateTo, setTradeFilterDateTo] = useState("")
+  const [tradeFilterSearch, setTradeFilterSearch] = useState("")
+  const [tradeFilterCP, setTradeFilterCP] = useState("")
+  const [tradeFilterCommodity, setTradeFilterCommodity] = useState("")
+  const [tradeFilterContractType, setTradeFilterContractType] = useState("")
+  const [tradeFilterPeakPeriod, setTradeFilterPeakPeriod] = useState("")
+  const [tradeActionOpen, setTradeActionOpen] = useState(false)
+  const tradeActionRef = useRef<HTMLDivElement>(null)
 
   const [uploadModalOpen, setUploadModalOpen] = useState(false)
   const [uploadedDocuments, setUploadedDocuments] = useState<UploadedDocument[]>([])
   const [newDocDescription, setNewDocDescription] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const tradeName = useMemo(() => generateTradeName(tradeDate, trades.length + 1), [tradeDate, trades.length])
+  const tradeName = useMemo(() => generateTradeName({ counterParty, tradeType, peakPeriod, tradeDate, qse, seq: trades.length + 1 }), [counterParty, tradeType, peakPeriod, tradeDate, qse, trades.length])
 
   const clearForm = () => {
     setTradeType(""); setCommodity(""); setQse(""); setDuns(""); setPortfolio("")
     setProductType(""); setStrategy(""); setCounterParty(""); setSleeveCounterparty("")
-    setBroker(""); setBrokerageFee(""); setBrokerageFeeUom("")
+    setBroker(""); setBrokerageFee(""); setBrokerageFeeUom(""); setPeakPeriod("")
   }
 
   const handleSaveTrade = () => {
     setTrades(prev => [...prev, {
       id: Date.now().toString(), tradeName, tradeDate, tradeType, commodity, qse, duns,
       portfolio, productType, strategy, counterParty, sleeveCounterparty, broker,
-      brokerageFee, brokerageFeeUom, status: "Draft", documents: uploadedDocuments,
+      brokerageFee, brokerageFeeUom, peakPeriod, status: "Draft", documents: uploadedDocuments,
     }])
     clearForm(); setUploadedDocuments([])
   }
@@ -1307,7 +1316,32 @@ export default function ETRMPage() {
     if (fileInputRef.current) fileInputRef.current.value = ""
   }
 
-  const pendingTrades = trades.filter(t => t.status === "Pending Approval")
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (tradeActionRef.current && !tradeActionRef.current.contains(e.target as Node)) setTradeActionOpen(false)
+    }
+    document.addEventListener("mousedown", handleClick)
+    return () => document.removeEventListener("mousedown", handleClick)
+  }, [])
+
+  const filteredTrades = useMemo(() => trades.filter(t => {
+    if (tradeFilterDateFrom && t.tradeDate < tradeFilterDateFrom) return false
+    if (tradeFilterDateTo && t.tradeDate > tradeFilterDateTo) return false
+    if (tradeFilterSearch) {
+      const q = tradeFilterSearch.toLowerCase()
+      if (!t.tradeName.toLowerCase().includes(q) && !t.counterParty.toLowerCase().includes(q) && !t.commodity.toLowerCase().includes(q)) return false
+    }
+    if (tradeFilterCP && t.counterParty !== tradeFilterCP) return false
+    if (tradeFilterCommodity) {
+      const match = tradeFilterCommodity === "Gas"
+        ? t.commodity.toLowerCase().includes("gas")
+        : t.commodity === tradeFilterCommodity
+      if (!match) return false
+    }
+    if (tradeFilterContractType && t.tradeType !== tradeFilterContractType) return false
+    if (tradeFilterPeakPeriod && t.peakPeriod !== tradeFilterPeakPeriod) return false
+    return true
+  }), [trades, tradeFilterDateFrom, tradeFilterDateTo, tradeFilterSearch, tradeFilterCP, tradeFilterCommodity, tradeFilterContractType, tradeFilterPeakPeriod])
 
   const mainTabs = [
     { key: "reports" as const, label: "Reports" },
@@ -1316,7 +1350,6 @@ export default function ETRMPage() {
   const subChips = [
     { key: "trades" as const,     label: "Trades" },
     { key: "deal-entry" as const, label: "Deal Entry" },
-    { key: "approvals" as const,  label: "Approvals" },
     { key: "upload" as const,     label: "Upload Files" },
   ]
 
@@ -1373,7 +1406,7 @@ export default function ETRMPage() {
                     </select>
                   </Field>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 16 }}>
                   <Field label="Trade Date">
                     <input type="date" value={tradeDate} onChange={e => setTradeDate(e.target.value)} style={nativeInput} />
                   </Field>
@@ -1385,6 +1418,12 @@ export default function ETRMPage() {
                   </Field>
                   <Field label="DUNS">
                     <input value={duns} onChange={e => setDuns(e.target.value)} style={nativeInput} placeholder="DUNS number" />
+                  </Field>
+                  <Field label="Peak Period">
+                    <select value={peakPeriod} onChange={e => setPeakPeriod(e.target.value)} style={nativeSelect}>
+                      <option value="">Peak Period</option>
+                      {PEAK_PERIOD_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
                   </Field>
                 </div>
               </SectionCard>
@@ -1454,74 +1493,198 @@ export default function ETRMPage() {
 
           {/* Trades */}
           {subChip === "trades" && (
-            <DataTable
-              value={trades} dataKey="id"
-              expandedRows={expandedTradeRows}
-              onRowToggle={e => setExpandedTradeRows(e.data as DataTableExpandedRows)}
-              rowExpansionTemplate={(t: Trade) => (
-                <div style={{ padding: 16, display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, background: "var(--surface-section)" }}>
-                  {([["QSE", t.qse], ["DUNS", t.duns], ["Portfolio", t.portfolio], ["Product Type", t.productType],
-                    ["Strategy", t.strategy], ["Sleeve Counterparty", t.sleeveCounterparty || "—"],
-                    ["Broker", t.broker], ["Brokerage Fee", `${t.brokerageFee} ${t.brokerageFeeUom}`]] as [string, string][]).map(([label, val]) => (
-                    <div key={label}>
-                      <p style={{ fontSize: 11, color: "var(--text-color-secondary)", margin: "0 0 2px" }}>{label}</p>
-                      <p style={{ fontSize: 12, fontWeight: 500, color: "var(--text-color)", margin: 0 }}>{val}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-              stripedRows size="small"
-              emptyMessage="No trades yet. Use Deal Entry to create one."
-              pt={{ column: { headerCell: { style: thStyle }, bodyCell: { style: tdStyle } } }}
-            >
-              <Column expander style={{ width: "3rem" }} />
-              <Column field="tradeName" header="Trade Name" style={{ fontFamily: "monospace", fontSize: "0.7rem", minWidth: 280 }} />
-              <Column field="tradeDate" header="Trade Date" sortable style={{ width: 120 }} />
-              <Column field="counterParty" header="Counter Party" sortable style={{ width: 130 }} />
-              <Column field="commodity" header="Commodity" sortable style={{ width: 130 }} />
-              <Column field="tradeType" header="Type" sortable style={{ width: 100 }} />
-              <Column header="Status" body={(t: Trade) => <StatusPill status={t.status} />} style={{ width: 170 }} />
-              <Column header="" body={(t: Trade) => (
-                <div style={{ display: "flex", gap: 4 }}>
-                  <button title="Edit" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-color-secondary)", fontSize: 13, padding: 4 }}>
-                    <i className="pi pi-pencil" />
-                  </button>
-                  <button title="Delete" onClick={() => setTrades(prev => prev.filter(x => x.id !== t.id))}
-                    style={{ background: "none", border: "none", cursor: "pointer", color: "#dc2626", fontSize: 13, padding: 4 }}>
-                    <i className="pi pi-trash" />
-                  </button>
-                </div>
-              )} style={{ width: 80 }} />
-            </DataTable>
-          )}
-
-          {/* Approvals */}
-          {subChip === "approvals" && (
             <div>
-              <div style={{ marginBottom: 12 }}>
-                <StatusPill status="Pending Approval" />
-                <span style={{ fontSize: 12, marginLeft: 8, color: "var(--text-color-secondary)" }}>{pendingTrades.length} pending</span>
-              </div>
-              <DataTable value={pendingTrades} size="small" stripedRows
-                emptyMessage="No trades pending approval."
-                pt={{ column: { headerCell: { style: thStyle }, bodyCell: { style: tdStyle } } }}
-              >
-                <Column field="tradeName" header="Trade Name" style={{ fontFamily: "monospace", fontSize: "0.7rem", minWidth: 280 }} />
-                <Column field="tradeDate" header="Trade Date" style={{ width: 120 }} />
-                <Column field="counterParty" header="Counter Party" style={{ width: 130 }} />
-                <Column field="commodity" header="Commodity" style={{ width: 130 }} />
-                <Column field="tradeType" header="Type" style={{ width: 100 }} />
-                <Column header="Actions" body={(t: Trade) => (
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={() => setTrades(prev => prev.map(x => x.id === t.id ? { ...x, status: "Approved" } : x))} style={btnSuccess}>
-                      <i className="pi pi-check" />Approve
-                    </button>
-                    <button onClick={() => setTrades(prev => prev.map(x => x.id === t.id ? { ...x, status: "Rejected" } : x))} style={btnDanger}>
-                      Reject
+              {/* Toolbar */}
+              <div style={{ display: "flex", alignItems: "flex-end", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  <label style={{ fontSize: 10, fontWeight: 500, color: "var(--text-color-secondary)" }}>Date From</label>
+                  <input type="date" value={tradeFilterDateFrom} onChange={e => setTradeFilterDateFrom(e.target.value)} style={{ ...nativeInput, width: 140 }} />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  <label style={{ fontSize: 10, fontWeight: 500, color: "var(--text-color-secondary)" }}>Date To</label>
+                  <input type="date" value={tradeFilterDateTo} onChange={e => setTradeFilterDateTo(e.target.value)} style={{ ...nativeInput, width: 140 }} />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  <label style={{ fontSize: 10, fontWeight: 500, color: "var(--text-color-secondary)" }}>Search</label>
+                  <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+                    <input value={tradeFilterSearch} onChange={e => setTradeFilterSearch(e.target.value)}
+                      placeholder="Search trades..." style={{ ...nativeInput, width: 190, paddingRight: 28 }} />
+                    <i className="pi pi-search" style={{ position: "absolute", right: 9, fontSize: 11, color: "var(--text-color-secondary)", pointerEvents: "none" }} />
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  <label style={{ fontSize: 10, fontWeight: 500, color: "var(--text-color-secondary)" }}>Counterparty</label>
+                  <select value={tradeFilterCP} onChange={e => setTradeFilterCP(e.target.value)} style={{ ...nativeSelect, width: 140 }}>
+                    <option value="">All</option>
+                    {counterpartyList.map(cp => <option key={cp} value={cp}>{cp}</option>)}
+                  </select>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  <label style={{ fontSize: 10, fontWeight: 500, color: "var(--text-color-secondary)" }}>Commodity</label>
+                  <select value={tradeFilterCommodity} onChange={e => setTradeFilterCommodity(e.target.value)} style={{ ...nativeSelect, width: 110 }}>
+                    <option value="">All</option>
+                    <option value="Power">Power</option>
+                    <option value="Gas">Gas</option>
+                  </select>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  <label style={{ fontSize: 10, fontWeight: 500, color: "var(--text-color-secondary)" }}>Contract Type</label>
+                  <select value={tradeFilterContractType} onChange={e => setTradeFilterContractType(e.target.value)} style={{ ...nativeSelect, width: 120 }}>
+                    <option value="">All</option>
+                    <option value="Physical">Physical</option>
+                    <option value="Financial">Financial</option>
+                  </select>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  <label style={{ fontSize: 10, fontWeight: 500, color: "var(--text-color-secondary)" }}>Peak Period</label>
+                  <select value={tradeFilterPeakPeriod} onChange={e => setTradeFilterPeakPeriod(e.target.value)} style={{ ...nativeSelect, width: 120 }}>
+                    <option value="">All</option>
+                    {PEAK_PERIOD_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+                <div style={{ flex: 1 }} />
+                {/* Select Action */}
+                <div ref={tradeActionRef} style={{ position: "relative", alignSelf: "flex-end" }}>
+                  <div style={{ display: "flex", border: "1px solid #cc1111", borderRadius: 6, overflow: "hidden" }}>
+                    <button onClick={() => setTradeActionOpen(o => !o)} style={{
+                      background: "none", border: "none", height: CTRL_H, padding: "0 12px",
+                      fontSize: 11, fontWeight: 700, color: "#cc1111", cursor: "pointer", letterSpacing: "0.05em",
+                    }}>SELECT ACTION</button>
+                    <button onClick={() => setTradeActionOpen(o => !o)} style={{
+                      background: "none", border: "none", borderLeft: "1px solid #cc1111",
+                      height: CTRL_H, padding: "0 8px", cursor: "pointer", display: "flex", alignItems: "center", color: "#cc1111",
+                    }}>
+                      <i className="pi pi-chevron-down" style={{ fontSize: 10 }} />
                     </button>
                   </div>
-                )} style={{ width: 200 }} />
-              </DataTable>
+                  {tradeActionOpen && (
+                    <div style={{
+                      position: "absolute", right: 0, top: "calc(100% + 4px)", zIndex: 100,
+                      background: "var(--surface-card)", border: BORDER, borderRadius: 6,
+                      minWidth: 180, boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
+                    }}>
+                      {[
+                        { label: "Approve", disabled: selectedTradeIds.size === 0, action: () => { setTrades(prev => prev.map(t => selectedTradeIds.has(t.id) ? { ...t, status: "Approved" as const } : t)); setSelectedTradeIds(new Set()); setTradeActionOpen(false) } },
+                        { label: "Reject",  disabled: selectedTradeIds.size === 0, action: () => { setTrades(prev => prev.map(t => selectedTradeIds.has(t.id) ? { ...t, status: "Rejected" as const } : t)); setSelectedTradeIds(new Set()); setTradeActionOpen(false) } },
+                        { label: "Export to Excel", disabled: false, action: () => setTradeActionOpen(false) },
+                      ].map(({ label, disabled, action }) => (
+                        <button key={label} onClick={action} disabled={disabled} style={{
+                          display: "block", width: "100%", textAlign: "left", background: "none",
+                          border: "none", padding: "8px 14px", fontSize: 12,
+                          cursor: disabled ? "not-allowed" : "pointer",
+                          color: disabled ? "var(--text-color-secondary)" : "var(--text-color)",
+                          opacity: disabled ? 0.5 : 1,
+                        }}
+                          onMouseEnter={e => { if (!disabled) e.currentTarget.style.background = "var(--surface-section)" }}
+                          onMouseLeave={e => { e.currentTarget.style.background = "none" }}
+                        >{label}</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Table */}
+              <div style={{ border: BORDER, borderRadius: 12, overflow: "hidden" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr>
+                      <th style={{ ...thStyle, width: 40, textAlign: "center" }}>
+                        <input type="checkbox"
+                          checked={filteredTrades.length > 0 && filteredTrades.every(t => selectedTradeIds.has(t.id))}
+                          ref={el => { if (el) el.indeterminate = filteredTrades.some(t => selectedTradeIds.has(t.id)) && !filteredTrades.every(t => selectedTradeIds.has(t.id)) }}
+                          onChange={() => {
+                            const allSel = filteredTrades.every(t => selectedTradeIds.has(t.id))
+                            setSelectedTradeIds(prev => {
+                              const next = new Set(prev)
+                              filteredTrades.forEach(t => allSel ? next.delete(t.id) : next.add(t.id))
+                              return next
+                            })
+                          }}
+                          style={{ cursor: "pointer", accentColor: "#cc1111", margin: 0 }} />
+                      </th>
+                      <th style={{ ...thStyle, width: 32 }} />
+                      <th style={{ ...thStyle, textAlign: "left", minWidth: 280 }}>Trade Name</th>
+                      <th style={{ ...thStyle, width: 110, textAlign: "center" }}>Trade Date</th>
+                      <th style={{ ...thStyle, width: 130, textAlign: "left" }}>Counter Party</th>
+                      <th style={{ ...thStyle, width: 120, textAlign: "left" }}>Commodity</th>
+                      <th style={{ ...thStyle, width: 110, textAlign: "left" }}>Peak Period</th>
+                      <th style={{ ...thStyle, width: 110, textAlign: "left" }}>Type</th>
+                      <th style={{ ...thStyle, width: 160, textAlign: "left" }}>Status</th>
+                      <th style={{ ...thStyle, width: 80 }} />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredTrades.length === 0 && (
+                      <tr>
+                        <td colSpan={10} style={{ ...tdStyle, textAlign: "center", color: "var(--text-color-secondary)", padding: 32 }}>
+                          No trades match the current filters.
+                        </td>
+                      </tr>
+                    )}
+                    {filteredTrades.map(t => {
+                      const sel = selectedTradeIds.has(t.id)
+                      const exp = expandedTradeIds.has(t.id)
+                      const rowBg = sel ? "rgba(204,17,17,0.04)" : "var(--surface-card)"
+                      const cellBase: React.CSSProperties = { ...tdStyle, borderTop: BORDER }
+                      const firstCell: React.CSSProperties = { ...cellBase, borderLeft: sel ? "2px solid rgba(204,17,17,0.4)" : "2px solid transparent" }
+                      return (
+                        <React.Fragment key={t.id}>
+                          <tr style={{ background: rowBg, cursor: "pointer" }}
+                            onClick={() => setSelectedTradeIds(prev => { const n = new Set(prev); n.has(t.id) ? n.delete(t.id) : n.add(t.id); return n })}>
+                            <td style={{ ...firstCell, textAlign: "center" }}>
+                              <input type="checkbox" checked={sel}
+                                onChange={() => setSelectedTradeIds(prev => { const n = new Set(prev); n.has(t.id) ? n.delete(t.id) : n.add(t.id); return n })}
+                                onClick={e => e.stopPropagation()}
+                                style={{ cursor: "pointer", accentColor: "#cc1111", margin: 0 }} />
+                            </td>
+                            <td style={{ ...cellBase, textAlign: "center" }}>
+                              <button onClick={e => { e.stopPropagation(); setExpandedTradeIds(prev => { const n = new Set(prev); n.has(t.id) ? n.delete(t.id) : n.add(t.id); return n }) }}
+                                style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "inline-flex", alignItems: "center" }}>
+                                <i className={`pi pi-chevron-${exp ? "down" : "right"}`} style={{ fontSize: 10, color: "var(--text-color-secondary)" }} />
+                              </button>
+                            </td>
+                            <td style={{ ...cellBase, fontFamily: "monospace", fontSize: "0.7rem" }}>{t.tradeName}</td>
+                            <td style={{ ...cellBase, textAlign: "center" }}>{t.tradeDate}</td>
+                            <td style={cellBase}>{t.counterParty}</td>
+                            <td style={cellBase}>{t.commodity}</td>
+                            <td style={cellBase}>{t.peakPeriod || "—"}</td>
+                            <td style={cellBase}>{t.tradeType}</td>
+                            <td style={cellBase}><StatusPill status={t.status} /></td>
+                            <td style={cellBase}>
+                              <div style={{ display: "flex", gap: 4 }}>
+                                <button title="Edit" onClick={e => e.stopPropagation()} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-color-secondary)", fontSize: 13, padding: 4 }}>
+                                  <i className="pi pi-pencil" />
+                                </button>
+                                <button title="Delete" onClick={e => { e.stopPropagation(); setTrades(prev => prev.filter(x => x.id !== t.id)) }}
+                                  style={{ background: "none", border: "none", cursor: "pointer", color: "#dc2626", fontSize: 13, padding: 4 }}>
+                                  <i className="pi pi-trash" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                          {exp && (
+                            <tr style={{ background: "var(--surface-section)" }}>
+                              <td colSpan={10} style={{ padding: 0, borderTop: BORDER }}>
+                                <div style={{ padding: 16, display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16 }}>
+                                  {([["QSE", t.qse], ["DUNS", t.duns], ["Portfolio", t.portfolio], ["Product Type", t.productType],
+                                    ["Strategy", t.strategy], ["Sleeve CP", t.sleeveCounterparty || "—"],
+                                    ["Broker", t.broker], ["Brokerage Fee", `${t.brokerageFee} ${t.brokerageFeeUom}`]] as [string, string][]).map(([label, val]) => (
+                                    <div key={label}>
+                                      <p style={{ fontSize: 11, color: "var(--text-color-secondary)", margin: "0 0 2px" }}>{label}</p>
+                                      <p style={{ fontSize: 12, fontWeight: 500, color: "var(--text-color)", margin: 0 }}>{val}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
