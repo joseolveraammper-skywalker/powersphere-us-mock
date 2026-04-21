@@ -55,7 +55,6 @@ function parseReportDate(dateStr: string): Date {
 // ============ STYLE CONSTANTS ============
 const BORDER  = "1px solid var(--surface-border)"
 const CTRL_H  = "30px"
-const PANEL_H = 620
 
 const nativeInput: React.CSSProperties = {
   height: CTRL_H, padding: "0 0.5rem", fontSize: 12, border: BORDER, borderRadius: 6,
@@ -382,12 +381,16 @@ export default function RealTimeOperationsPage() {
     />
   )
   const checkboxBody = (row: Report) => (
-    <input type="checkbox"
-      checked={selectedIds.has(row.id)}
-      onChange={() => toggleOne(row.id)}
-      onClick={e => e.stopPropagation()}
-      style={{ width: 14, height: 14, cursor: "pointer", accentColor: "#cc1111" }}
-    />
+    <div
+      onClick={e => { e.stopPropagation(); toggleOne(row.id) }}
+      style={{ display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: "4px" }}
+    >
+      <input type="checkbox"
+        checked={selectedIds.has(row.id)}
+        onChange={() => {}}
+        style={{ width: 14, height: 14, cursor: "pointer", accentColor: "#cc1111", pointerEvents: "none" }}
+      />
+    </div>
   )
   const typeBody       = (row: Report) => <TypePill type={row.resourceType} />
   const statusBody     = (row: Report) => <ReportStatusSteps report={row} />
@@ -410,10 +413,6 @@ export default function RealTimeOperationsPage() {
       <button title="Download"
         style={{ width: 26, height: 26, display: "inline-flex", alignItems: "center", justifyContent: "center", background: "none", border: "1px solid transparent", borderRadius: 6, cursor: "pointer", color: "var(--text-color-secondary)" }}>
         <i className="pi pi-download" style={{ fontSize: 11 }} />
-      </button>
-      <button onClick={() => sendEmail([row.id])} title="Send email"
-        style={{ width: 26, height: 26, display: "inline-flex", alignItems: "center", justifyContent: "center", background: row.emailSent ? "rgba(22,163,74,0.08)" : "none", border: row.emailSent ? "1px solid #16a34a" : "1px solid transparent", borderRadius: 6, cursor: "pointer", color: row.emailSent ? "#16a34a" : "var(--text-color-secondary)" }}>
-        <i className="pi pi-envelope" style={{ fontSize: 11 }} />
       </button>
     </div>
   )
@@ -582,25 +581,20 @@ export default function RealTimeOperationsPage() {
               <option value="send-email">Send email</option>
               <option value="download">Download</option>
             </select>
-            {selectedIds.size > 0 && (
-              <span style={{ fontSize: 11, color: "var(--text-color-secondary)", whiteSpace: "nowrap" }}>{selectedIds.size} selected</span>
-            )}
             <button onClick={() => setUploadModalOpen(true)} style={btnPrimary}>
               <i className="pi pi-upload" style={{ fontSize: 11 }} />Upload
             </button>
           </div>
 
-          {/* Split layout */}
-          <div style={{ display: "flex", gap: 16 }}>
+          {/* Split layout — both panels always visible */}
+          <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
 
-            {/* Table panel — scrollable inside fixed height, paginator pinned to bottom */}
-            <div style={{ flex: "0 0 calc(50% - 8px)", height: PANEL_H, border: BORDER, borderRadius: 12, overflow: "hidden" }}>
+            {/* Table panel — natural height, paginator sits directly below rows */}
+            <div style={{ flex: "0 0 calc(50% - 8px)", border: BORDER, borderRadius: 12, overflow: "hidden" }}>
               <DataTable
                 value={filteredReports}
                 dataKey="id"
                 size="small"
-                scrollable
-                scrollHeight={`${PANEL_H - 48}px`}
                 paginator
                 rows={8}
                 emptyMessage="No reports match the current filters."
@@ -618,12 +612,12 @@ export default function RealTimeOperationsPage() {
                 <Column header="Type"           body={typeBody}       style={{ width: 66 }} />
                 <Column header="Validation"     body={validationBody} style={{ width: 80 }} />
                 <Column header="Status"         body={statusBody}     style={{ width: 100 }} />
-                <Column header=""               body={actionsBody}    style={{ width: 86 }} />
+                <Column header=""               body={actionsBody}    style={{ width: 70 }} />
               </DataTable>
             </div>
 
-            {/* PDF viewer panel */}
-            <div style={{ flex: "0 0 calc(50% - 8px)", height: PANEL_H, border: BORDER, borderRadius: 12, overflow: "hidden", background: "var(--surface-card)", display: "flex", flexDirection: "column" }}>
+            {/* PDF viewer panel — always visible, sticky */}
+            <div style={{ flex: "0 0 calc(50% - 8px)", position: "sticky", top: 16, height: 560, border: BORDER, borderRadius: 12, overflow: "hidden", background: "var(--surface-card)", display: "flex", flexDirection: "column" }}>
               {previewReport ? (
                 <>
                   {/* Toolbar */}
