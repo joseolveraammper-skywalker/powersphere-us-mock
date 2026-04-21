@@ -137,11 +137,10 @@ function ReportStatusSteps({ report }: { report: Report }) {
     : "Pending approval"
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
       <ClickTooltip text="Uploaded by john@ammper.com">
         <i className="pi pi-check" style={{ fontSize: 11, color: "#16a34a" }} />
       </ClickTooltip>
-      <i className="pi pi-angle-right" style={{ fontSize: 9, color: "var(--text-color-secondary)" }} />
       <ClickTooltip text={step2Tooltip}>
         {report.status === "approved"
           ? <i className="pi pi-check" style={{ fontSize: 11, color: "#16a34a" }} />
@@ -149,7 +148,6 @@ function ReportStatusSteps({ report }: { report: Report }) {
           ? <i className="pi pi-times" style={{ fontSize: 11, color: "#dc2626" }} />
           : <PendingDots />}
       </ClickTooltip>
-      <i className="pi pi-angle-right" style={{ fontSize: 9, color: "var(--text-color-secondary)" }} />
       <ClickTooltip text={report.emailSent ? "Email sent" : "Email not yet sent"}>
         {report.emailSent
           ? <i className="pi pi-check" style={{ fontSize: 11, color: "#16a34a" }} />
@@ -586,11 +584,11 @@ export default function RealTimeOperationsPage() {
             </button>
           </div>
 
-          {/* Split layout — both panels always visible */}
+          {/* Split layout — PDF panel only when eye is clicked */}
           <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
 
-            {/* Table panel — natural height, paginator sits directly below rows */}
-            <div style={{ flex: "0 0 calc(50% - 8px)", border: BORDER, borderRadius: 12, overflow: "hidden" }}>
+            {/* Table panel — full width when no preview, half when preview open */}
+            <div style={{ flex: previewReport ? "0 0 calc(50% - 8px)" : "1 1 100%", minWidth: 0, border: BORDER, borderRadius: 12, overflow: "hidden" }}>
               <DataTable
                 value={filteredReports}
                 dataKey="id"
@@ -616,65 +614,47 @@ export default function RealTimeOperationsPage() {
               </DataTable>
             </div>
 
-            {/* PDF viewer panel — always visible, sticky */}
-            <div style={{ flex: "0 0 calc(50% - 8px)", position: "sticky", top: 16, height: 560, border: BORDER, borderRadius: 12, overflow: "hidden", background: "var(--surface-card)", display: "flex", flexDirection: "column" }}>
-              {previewReport ? (
-                <>
-                  {/* Toolbar */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", borderBottom: BORDER, flexShrink: 0, flexWrap: "wrap" }}>
-                    <i className="pi pi-file-pdf" style={{ fontSize: 13, color: "#cc1111" }} />
-                    <span style={{ fontSize: 12, fontWeight: 600, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
-                      {previewReport.report}.pdf
-                    </span>
-                    {/* Page nav */}
-                    <button onClick={() => setPdfPage(p => Math.max(1, p - 1))} disabled={pdfPage === 1} style={{ background: "none", border: "none", cursor: pdfPage === 1 ? "default" : "pointer", padding: 3, color: "var(--text-color-secondary)", opacity: pdfPage === 1 ? 0.4 : 1, display: "inline-flex" }}>
-                      <i className="pi pi-chevron-left" style={{ fontSize: 10 }} />
-                    </button>
-                    <span style={{ fontSize: 11, color: "var(--text-color-secondary)", minWidth: 32, textAlign: "center" }}>{pdfPage} / 3</span>
-                    <button onClick={() => setPdfPage(p => Math.min(3, p + 1))} disabled={pdfPage === 3} style={{ background: "none", border: "none", cursor: pdfPage === 3 ? "default" : "pointer", padding: 3, color: "var(--text-color-secondary)", opacity: pdfPage === 3 ? 0.4 : 1, display: "inline-flex" }}>
-                      <i className="pi pi-chevron-right" style={{ fontSize: 10 }} />
-                    </button>
-                    {/* Divider */}
-                    <div style={{ width: 1, height: 18, background: "var(--surface-border)", flexShrink: 0 }} />
-                    {/* Approve button */}
-                    <button
-                      onClick={() => approveIds([previewReport.id])}
-                      disabled={previewReport.status === "approved"}
-                      title="Approve this report"
-                      style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: previewReport.status === "approved" ? "default" : "pointer", border: "1px solid #16a34a", background: previewReport.status === "approved" ? "rgba(22,163,74,0.12)" : "none", color: previewReport.status === "approved" ? "#16a34a" : "#16a34a", opacity: previewReport.status === "approved" ? 0.5 : 1 }}>
-                      <i className="pi pi-check" style={{ fontSize: 10 }} />
-                      {previewReport.status === "approved" ? "Approved" : "Approve"}
-                    </button>
-                    {/* Reject button */}
-                    <button
-                      onClick={() => openRejectModal(previewReport.id)}
-                      disabled={previewReport.status === "rejected"}
-                      title="Reject this report"
-                      style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: previewReport.status === "rejected" ? "default" : "pointer", border: "1px solid #dc2626", background: previewReport.status === "rejected" ? "rgba(220,38,38,0.10)" : "none", color: "#dc2626", opacity: previewReport.status === "rejected" ? 0.5 : 1 }}>
-                      <i className="pi pi-times" style={{ fontSize: 10 }} />
-                      {previewReport.status === "rejected" ? "Rejected" : "Reject"}
-                    </button>
-                    {/* Divider */}
-                    <div style={{ width: 1, height: 18, background: "var(--surface-border)", flexShrink: 0 }} />
-                    <button title="Download" style={{ background: "none", border: "none", cursor: "pointer", padding: 3, color: "var(--text-color-secondary)", display: "inline-flex" }}>
-                      <i className="pi pi-download" style={{ fontSize: 12 }} />
-                    </button>
-                    <button onClick={() => setPreviewReportId(null)} title="Close" style={{ background: "none", border: "none", cursor: "pointer", padding: 3, color: "var(--text-color-secondary)", display: "inline-flex" }}>
-                      <i className="pi pi-times" style={{ fontSize: 12 }} />
-                    </button>
-                  </div>
-                  {/* Document scroll area */}
-                  <div style={{ flex: 1, overflowY: "auto", background: "#3a3a3a", padding: 20 }}>
-                    <PdfMockPages report={previewReport} />
-                  </div>
-                </>
-              ) : (
-                <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, color: "var(--text-color-secondary)" }}>
-                  <i className="pi pi-file-pdf" style={{ fontSize: 32, opacity: 0.25 }} />
-                  <span style={{ fontSize: 12 }}>Click the eye icon on a report to preview</span>
+            {/* PDF viewer panel — only rendered when eye icon is clicked */}
+            {previewReport && (
+              <div style={{ flex: "0 0 calc(50% - 8px)", position: "sticky", top: 16, height: 560, border: BORDER, borderRadius: 12, overflow: "hidden", background: "var(--surface-card)", display: "flex", flexDirection: "column" }}>
+                {/* Toolbar */}
+                <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", borderBottom: BORDER, flexShrink: 0, flexWrap: "wrap" }}>
+                  <i className="pi pi-file-pdf" style={{ fontSize: 13, color: "#cc1111" }} />
+                  <span style={{ fontSize: 12, fontWeight: 600, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+                    {previewReport.report}.pdf
+                  </span>
+                  <button onClick={() => setPdfPage(p => Math.max(1, p - 1))} disabled={pdfPage === 1} style={{ background: "none", border: "none", cursor: pdfPage === 1 ? "default" : "pointer", padding: 3, color: "var(--text-color-secondary)", opacity: pdfPage === 1 ? 0.4 : 1, display: "inline-flex" }}>
+                    <i className="pi pi-chevron-left" style={{ fontSize: 10 }} />
+                  </button>
+                  <span style={{ fontSize: 11, color: "var(--text-color-secondary)", minWidth: 32, textAlign: "center" }}>{pdfPage} / 3</span>
+                  <button onClick={() => setPdfPage(p => Math.min(3, p + 1))} disabled={pdfPage === 3} style={{ background: "none", border: "none", cursor: pdfPage === 3 ? "default" : "pointer", padding: 3, color: "var(--text-color-secondary)", opacity: pdfPage === 3 ? 0.4 : 1, display: "inline-flex" }}>
+                    <i className="pi pi-chevron-right" style={{ fontSize: 10 }} />
+                  </button>
+                  <div style={{ width: 1, height: 18, background: "var(--surface-border)", flexShrink: 0 }} />
+                  <button onClick={() => approveIds([previewReport.id])} disabled={previewReport.status === "approved"} title="Approve this report"
+                    style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: previewReport.status === "approved" ? "default" : "pointer", border: "1px solid #16a34a", background: previewReport.status === "approved" ? "rgba(22,163,74,0.12)" : "none", color: "#16a34a", opacity: previewReport.status === "approved" ? 0.5 : 1 }}>
+                    <i className="pi pi-check" style={{ fontSize: 10 }} />
+                    {previewReport.status === "approved" ? "Approved" : "Approve"}
+                  </button>
+                  <button onClick={() => openRejectModal(previewReport.id)} disabled={previewReport.status === "rejected"} title="Reject this report"
+                    style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: previewReport.status === "rejected" ? "default" : "pointer", border: "1px solid #dc2626", background: previewReport.status === "rejected" ? "rgba(220,38,38,0.10)" : "none", color: "#dc2626", opacity: previewReport.status === "rejected" ? 0.5 : 1 }}>
+                    <i className="pi pi-times" style={{ fontSize: 10 }} />
+                    {previewReport.status === "rejected" ? "Rejected" : "Reject"}
+                  </button>
+                  <div style={{ width: 1, height: 18, background: "var(--surface-border)", flexShrink: 0 }} />
+                  <button title="Download" style={{ background: "none", border: "none", cursor: "pointer", padding: 3, color: "var(--text-color-secondary)", display: "inline-flex" }}>
+                    <i className="pi pi-download" style={{ fontSize: 12 }} />
+                  </button>
+                  <button onClick={() => setPreviewReportId(null)} title="Close" style={{ background: "none", border: "none", cursor: "pointer", padding: 3, color: "var(--text-color-secondary)", display: "inline-flex" }}>
+                    <i className="pi pi-times" style={{ fontSize: 12 }} />
+                  </button>
                 </div>
-              )}
-            </div>
+                {/* Document scroll area */}
+                <div style={{ flex: 1, overflowY: "auto", background: "#3a3a3a", padding: 20 }}>
+                  <PdfMockPages report={previewReport} />
+                </div>
+              </div>
+            )}
 
           </div>
         </div>
