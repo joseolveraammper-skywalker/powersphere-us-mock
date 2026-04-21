@@ -4,12 +4,7 @@ import { useState, useMemo, useRef } from "react"
 import { DashboardLayout } from "@/components/power-sphere/dashboard-layout"
 import { DataTable } from "primereact/datatable"
 import { Column } from "primereact/column"
-import { Button } from "primereact/button"
 import { Dialog } from "primereact/dialog"
-import { InputText } from "primereact/inputtext"
-import { Dropdown } from "primereact/dropdown"
-import type { DataTableExpandedRows } from "primereact/datatable"
-import { FileText, Check } from "lucide-react"
 import { DailyLog, type DailyLogHandle } from "./DailyLog"
 
 // ============ REPORTS REPOSITORY DATA ============
@@ -25,6 +20,8 @@ const mockReports = [
   { id: 9, report: "Energy Trading Summary", uploadedDate: "03-02-2026", resourceType: "GEN", customer: "Wild Duck Bar & Grill LLC", asset: "Commercial Unit", validation1: true, validation2: true },
 ]
 
+type Report = typeof mockReports[0]
+
 // ============ UPLOAD ASSET → RESOURCE TYPE MAP ============
 const assetResourceTypeMap: Record<string, string> = {
   "Wind Farm Alpha": "NCLR", "Plant B-12": "ESR", "Portfolio C": "GEN",
@@ -38,29 +35,50 @@ function parseReportDate(dateStr: string): Date {
   return new Date(year, month - 1, day)
 }
 
-// ── Pill badge components ──
+const BORDER = "1px solid var(--surface-border)"
+const CTRL_H = "30px"
+
+const nativeInput: React.CSSProperties = {
+  height: CTRL_H, padding: "0 0.5rem", fontSize: 12, border: BORDER, borderRadius: 6,
+  background: "var(--surface-card)", color: "var(--text-color)", outline: "none",
+  fontFamily: "inherit", boxSizing: "border-box",
+}
+const nativeSelect: React.CSSProperties = { ...nativeInput, cursor: "pointer" }
+const btnPrimary: React.CSSProperties = {
+  background: "#cc1111", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600,
+  padding: "0.35rem 0.875rem", color: "#fff", cursor: "pointer",
+  display: "inline-flex", alignItems: "center", gap: 6,
+}
+const btnSecondary: React.CSSProperties = {
+  background: "none", border: BORDER, borderRadius: 6, fontSize: 12, fontWeight: 500,
+  padding: "0.35rem 0.875rem", color: "var(--text-color)", cursor: "pointer",
+  display: "inline-flex", alignItems: "center", gap: 6,
+}
+
 function TypePill({ type }: { type: string }) {
   const styles: Record<string, { bg: string; color: string }> = {
-    NCLR: { bg: "rgba(26,92,168,0.10)", color: "#1a5ca8" },
-    ESR:  { bg: "rgba(217,119,6,0.10)",  color: "#b45309" },
-    GEN:  { bg: "rgba(45,122,45,0.10)",  color: "#2d7a2d" },
+    NCLR: { bg: "rgba(26,92,168,0.10)",  color: "#1a5ca8" },
+    ESR:  { bg: "rgba(217,119,6,0.10)",   color: "#b45309" },
+    GEN:  { bg: "rgba(45,122,45,0.10)",   color: "#2d7a2d" },
   }
   const s = styles[type] ?? { bg: "rgba(100,100,100,0.1)", color: "#555" }
   return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold tracking-wide"
-      style={{ background: s.bg, color: s.color }}>
+    <span style={{
+      display: "inline-flex", alignItems: "center", padding: "1px 8px",
+      borderRadius: 20, fontSize: 11, fontWeight: 600,
+      background: s.bg, color: s.color,
+    }}>
       {type}
     </span>
   )
 }
-
 
 // ============ MAIN PAGE ============
 export default function RealTimeOperationsPage() {
   const [activeTab, setActiveTab] = useState(0)
 
   // Reports state
-  const [expandedReportRows, setExpandedReportRows] = useState<DataTableExpandedRows>({})
+  const [previewReport, setPreviewReport] = useState<Report | null>(null)
   const [reportFilterQuery, setReportFilterQuery] = useState("")
   const [uploadModalOpen, setUploadModalOpen] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState("")
@@ -76,14 +94,15 @@ export default function RealTimeOperationsPage() {
 
   const autoResourceType = selectedAsset ? assetResourceTypeMap[selectedAsset] || "" : ""
 
-  const uniqueReportCustomers = [...new Set(mockReports.map((r) => r.customer))].map(v => ({ label: v, value: v }))
-  const uniqueReportAssets = [...new Set(mockReports.map((r) => r.asset))].map(v => ({ label: v, value: v }))
-  const uniqueReportResourceTypes = [...new Set(mockReports.map((r) => r.resourceType))].map(v => ({ label: v, value: v }))
+  const uniqueReportCustomers = [...new Set(mockReports.map((r) => r.customer))]
+  const uniqueReportAssets    = [...new Set(mockReports.map((r) => r.asset))]
+  const uniqueReportResourceTypes = [...new Set(mockReports.map((r) => r.resourceType))]
+
   const filteredReports = useMemo(() => {
     return mockReports.filter((report) => {
       const reportDate = parseReportDate(report.uploadedDate)
       const start = new Date(reportStartDate)
-      const end = new Date(reportEndDate)
+      const end   = new Date(reportEndDate)
       if (reportDate < start || reportDate > end) return false
       if (reportFilterCustomer && report.customer !== reportFilterCustomer) return false
       if (reportFilterAsset && report.asset !== reportFilterAsset) return false
@@ -106,193 +125,64 @@ export default function RealTimeOperationsPage() {
   }
 
   // ── Column body templates ──
-  const reportResourceTypeBody = (row: typeof mockReports[0]) => <TypePill type={row.resourceType} />
+  const reportResourceTypeBody = (row: Report) => <TypePill type={row.resourceType} />
 
-  const reportValidationBody = (row: typeof mockReports[0]) => (
-    <div className="flex gap-2">
+  const reportValidationBody = (row: Report) => (
+    <div style={{ display: "flex", gap: 8 }}>
       <span title="Validation 1">
         {row.validation1
-          ? <Check className="h-3.5 w-3.5" style={{ color: "#2d7a2d" }} />
+          ? <i className="pi pi-check" style={{ fontSize: 13, color: "#2d7a2d" }} />
           : <span style={{ color: "var(--text-color-secondary)", fontSize: 13 }}>—</span>}
       </span>
       <span title="Validation 2">
         {row.validation2
-          ? <Check className="h-3.5 w-3.5" style={{ color: "#2d7a2d" }} />
+          ? <i className="pi pi-check" style={{ fontSize: 13, color: "#2d7a2d" }} />
           : <span style={{ color: "var(--text-color-secondary)", fontSize: 13 }}>—</span>}
       </span>
     </div>
   )
 
-  const reportActionsBody = () => (
-    <div className="flex gap-0.5">
-      <Button icon="pi pi-eye" rounded text size="small" tooltip="Preview" style={{ width: "1.75rem", height: "1.75rem" }} />
-      <Button icon="pi pi-download" rounded text size="small" tooltip="Download" style={{ width: "1.75rem", height: "1.75rem" }} />
+  const reportActionsBody = (row: Report) => (
+    <div style={{ display: "flex", gap: 2 }}>
+      <button
+        onClick={() => setPreviewReport(prev => prev?.id === row.id ? null : row)}
+        title="Preview"
+        style={{
+          width: 28, height: 28, display: "inline-flex", alignItems: "center", justifyContent: "center",
+          background: previewReport?.id === row.id ? "rgba(204,17,17,0.08)" : "none",
+          border: previewReport?.id === row.id ? "1px solid #cc1111" : "1px solid transparent",
+          borderRadius: 6, cursor: "pointer",
+          color: previewReport?.id === row.id ? "#cc1111" : "var(--text-color-secondary)",
+        }}
+      >
+        <i className="pi pi-eye" style={{ fontSize: 12 }} />
+      </button>
+      <button
+        title="Download"
+        style={{
+          width: 28, height: 28, display: "inline-flex", alignItems: "center", justifyContent: "center",
+          background: "none", border: "1px solid transparent", borderRadius: 6, cursor: "pointer",
+          color: "var(--text-color-secondary)",
+        }}
+      >
+        <i className="pi pi-download" style={{ fontSize: 12 }} />
+      </button>
     </div>
   )
 
-  const reportExpansionTemplate = (row: typeof mockReports[0]) => (
-    <div className="px-6 py-4" style={{ background: "var(--surface-ground)" }}>
-      <div className="rounded-xl overflow-hidden border" style={{ borderColor: "var(--surface-border)", background: "var(--surface-card)" }}>
-        <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: "var(--surface-border)" }}>
-          <div className="flex items-center gap-2">
-            <FileText className="h-3.5 w-3.5" style={{ color: "#cc1111" }} />
-            <span className="text-xs font-medium" style={{ color: "var(--text-color)" }}>{row.report}.pdf</span>
-          </div>
-        </div>
-        <div className="p-5 space-y-4">
-          <div className="flex justify-between border-b pb-4" style={{ borderColor: "var(--surface-border)" }}>
-            <div>
-              <p className="text-[10px] uppercase tracking-widest mb-0.5" style={{ color: "var(--text-color-secondary)" }}>Ammper Power</p>
-              <p className="text-xs font-bold" style={{ color: "#2d7a2d" }}>Power Sphere</p>
-              <h1 className="text-sm font-semibold mt-2" style={{ color: "var(--text-color)" }}>{row.report}</h1>
-            </div>
-            <div className="text-right">
-              <p className="text-[10px] uppercase tracking-wider mb-0.5" style={{ color: "var(--text-color-secondary)" }}>Report Date</p>
-              <p className="text-xs font-medium" style={{ color: "var(--text-color)" }}>{row.uploadedDate}</p>
-            </div>
-          </div>
-          <div className="flex gap-1.5 flex-wrap">
-            <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: "var(--surface-section)", color: "var(--text-color-secondary)" }}>
-              {row.customer}
-            </span>
-            <span className="px-2 py-0.5 rounded-full text-[11px]" style={{ background: "var(--surface-section)", color: "var(--text-color-secondary)" }}>
-              {row.asset}
-            </span>
-            <TypePill type={row.resourceType} />
-          </div>
-          <p className="text-xs leading-relaxed" style={{ color: "var(--text-color-secondary)" }}>
-            This report provides a comprehensive analysis of operational performance for {row.asset} during the reporting period. Key metrics indicate stable generation output with minor variance from forecasted levels.
-          </p>
-          <div className="grid grid-cols-3 gap-3">
-            {[["ERCOT Protocols", "Compliant", "#2d7a2d"], ["NERC Standards", "Compliant", "#2d7a2d"], ["Internal SLA", "Met", "#1a5ca8"]].map(([label, val, color]) => (
-              <div key={label} className="p-3 rounded-xl" style={{ background: "var(--surface-section)" }}>
-                <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "var(--text-color-secondary)" }}>{label}</p>
-                <p className="text-xs font-semibold" style={{ color }}>{val}</p>
-              </div>
-            ))}
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { label: "Generation Output (MW)", bars: [65, 78, 82, 71, 88, 92, 85, 79, 83, 90, 87, 81], color: "#cc1111" },
-              { label: "Response Time (sec)", bars: [45, 52, 38, 41, 55, 48, 42, 50, 44, 39, 47, 43], color: "#1a5ca8" },
-            ].map(({ label, bars, color }) => (
-              <div key={label} className="p-3 rounded-xl" style={{ background: "var(--surface-section)" }}>
-                <p className="text-[10px] uppercase tracking-wider mb-2" style={{ color: "var(--text-color-secondary)" }}>{label}</p>
-                <div className="h-12 flex items-end gap-0.5">
-                  {bars.map((v, i) => (
-                    <div key={i} className="flex-1 rounded-t-sm" style={{ height: `${v}%`, background: color, opacity: 0.8 }} />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-
-  // ── Shared control height — matches across all filter bar elements ──
-  const CTRL_H = "30px"
-  const BORDER = "1px solid var(--surface-border)"
-
-  // ── Shared dropdown passthrough for compact styling ──
-  const ddPt = {
-    root: { style: { fontSize: 12, height: CTRL_H, border: BORDER } },
-    input: { style: { fontSize: 12, padding: "0 0.5rem", height: "100%", display: "flex", alignItems: "center", minHeight: "unset" } },
-    trigger: { style: { width: "1.75rem" } },
-    item: { style: { fontSize: 12, padding: "0.375rem 0.75rem" } },
-    header: { style: { padding: "0.375rem 0.5rem" } },
-    filterInput: { style: { fontSize: 12 } },
+  const thStyle: React.CSSProperties = {
+    fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em",
+    color: "var(--text-color-secondary)", background: "var(--surface-card)",
+    borderBottom: BORDER, padding: "0.625rem 0.75rem",
   }
-
-  // ── Filter bar ──
-  const filterBar = (
-    type: "report" | "log",
-    startDate: string, setStart: (v: string) => void,
-    endDate: string, setEnd: (v: string) => void,
-    customers: { label: string; value: string }[],
-    customer: string | null, setCustomer: (v: string | null) => void,
-    assets: { label: string; value: string }[],
-    asset: string | null, setAsset: (v: string | null) => void,
-    resourceTypes: { label: string; value: string }[],
-    resourceType: string | null, setResourceType: (v: string | null) => void,
-    query: string, setQuery: (v: string) => void,
-  ) => (
-    <div className="flex flex-wrap items-center gap-2 mb-5">
-      {/* Search — height locked to CTRL_H */}
-      <div className="relative" style={{ flex: 1, minWidth: 160, height: CTRL_H }}>
-        <i className="pi pi-search" style={{
-          position: "absolute", left: "0.6rem", top: "50%",
-          transform: "translateY(-50%)", fontSize: 11,
-          color: "var(--text-color-secondary)", pointerEvents: "none", zIndex: 1,
-        }} />
-        <InputText
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          placeholder="Search..."
-          style={{ width: "100%", height: CTRL_H, paddingLeft: "1.85rem", paddingRight: "0.5rem", fontSize: 12, boxSizing: "border-box" }}
-        />
-      </div>
-
-      {/* Date range — height locked to CTRL_H */}
-      <div className="flex items-center gap-1.5 px-2 rounded-lg"
-        style={{ height: CTRL_H, background: "var(--surface-card)", border: BORDER, boxSizing: "border-box" }}>
-        <i className="pi pi-calendar" style={{ fontSize: 11, color: "var(--text-color-secondary)", flexShrink: 0 }} />
-        <input type="date" value={startDate} onChange={e => setStart(e.target.value)}
-          style={{ background: "transparent", border: "none", outline: "none", fontSize: 12, color: "var(--text-color)", cursor: "pointer" }}
-        />
-        <span style={{ color: "var(--text-color-secondary)", fontSize: 11, padding: "0 2px" }}>—</span>
-        <input type="date" value={endDate} onChange={e => setEnd(e.target.value)}
-          style={{ background: "transparent", border: "none", outline: "none", fontSize: 12, color: "var(--text-color)", cursor: "pointer" }}
-        />
-      </div>
-
-      {/* Compact dropdowns — height locked to CTRL_H via pt.root */}
-      <Dropdown value={customer} options={customers} onChange={e => setCustomer(e.value)}
-        placeholder="Customer" showClear style={{ minWidth: 120 }} pt={ddPt} />
-      <Dropdown value={asset} options={assets} onChange={e => setAsset(e.value)}
-        placeholder="Asset" showClear style={{ minWidth: 110 }} pt={ddPt} />
-      <Dropdown value={resourceType} options={resourceTypes} onChange={e => setResourceType(e.value)}
-        placeholder="Type" showClear style={{ minWidth: 90 }} pt={ddPt} />
-
-      {/* Upload */}
-      {type === "report" && (
-        <button
-          onClick={() => setUploadModalOpen(true)}
-          className="flex items-center gap-1.5 rounded-lg font-semibold transition-opacity hover:opacity-90"
-          style={{ background: "#cc1111", color: "#fff", border: "none", cursor: "pointer", fontSize: 12, padding: "0.375rem 0.875rem" }}
-        >
-          <i className="pi pi-upload" style={{ fontSize: 11 }} />
-          Upload
-        </button>
-      )}
-    </div>
-  )
-
-  // ── Shared table header style injected via className trick ──
-  const tableHeaderStyle = {
-    fontSize: "11px",
-    fontWeight: 600,
-    textTransform: "uppercase" as const,
-    letterSpacing: "0.06em",
-    color: "var(--text-color-secondary)",
-    background: "var(--surface-card)",
-    borderBottom: "1px solid var(--surface-border)",
-    padding: "0.625rem 0.75rem",
-  }
-
-  const tableCellStyle = {
-    fontSize: "13px",
-    color: "var(--text-color)",
-    padding: "0.625rem 0.75rem",
-    borderBottom: "1px solid var(--surface-border)",
-    borderTop: "none",
-    borderLeft: "none",
-    borderRight: "none",
+  const tdStyle: React.CSSProperties = {
+    fontSize: 13, color: "var(--text-color)", padding: "0.625rem 0.75rem",
+    borderBottom: BORDER, borderTop: "none", borderLeft: "none", borderRight: "none",
   }
 
   return (
     <DashboardLayout pageTitle="Real Time Operations">
+
       {/* Upload Modal */}
       {(() => {
         const mLabel: React.CSSProperties = {
@@ -302,19 +192,9 @@ export default function RealTimeOperationsPage() {
         }
         const mInput: React.CSSProperties = {
           width: "100%", padding: "0.375rem 0.5rem", fontSize: 12,
-          border: "1px solid var(--surface-border)", borderRadius: 6,
+          border: BORDER, borderRadius: 6,
           background: "var(--surface-card)", color: "var(--text-color)",
           outline: "none", boxSizing: "border-box", fontFamily: "inherit",
-        }
-        const mBtnSecondary: React.CSSProperties = {
-          background: "none", border: "1px solid var(--surface-border)", borderRadius: 6,
-          fontSize: 12, fontWeight: 500, padding: "0.35rem 0.75rem",
-          color: "var(--text-color-secondary)", cursor: "pointer",
-        }
-        const mBtnPrimary: React.CSSProperties = {
-          background: "#cc1111", border: "none", borderRadius: 6,
-          fontSize: 12, fontWeight: 600, padding: "0.35rem 0.875rem",
-          color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
         }
         return (
           <Dialog
@@ -331,19 +211,17 @@ export default function RealTimeOperationsPage() {
             style={{ width: 400 }}
             modal
             pt={{
-              header:  { style: { borderBottom: "1px solid var(--surface-border)", padding: "0.75rem 1rem" } },
+              header:  { style: { borderBottom: BORDER, padding: "0.75rem 1rem" } },
               content: { style: { padding: "1rem" } },
             }}
           >
             <div style={{ display: "flex", flexDirection: "column", gap: "0.875rem" }}>
-              {/* Drop zone */}
               <div
                 style={{
                   border: `2px dashed ${dragActive ? "#cc1111" : "var(--surface-border)"}`,
                   borderRadius: 10,
                   background: dragActive ? "rgba(204,17,17,0.04)" : "var(--surface-section)",
-                  padding: "1.5rem 1rem",
-                  textAlign: "center",
+                  padding: "1.5rem 1rem", textAlign: "center",
                   transition: "border-color 0.15s, background 0.15s",
                 }}
                 onDragEnter={handleDrag} onDragLeave={handleDrag}
@@ -354,56 +232,42 @@ export default function RealTimeOperationsPage() {
                 </div>
                 <p style={{ fontSize: 13, fontWeight: 500, color: "var(--text-color)", margin: 0 }}>Drop a PDF file here</p>
                 <p style={{ fontSize: 11, color: "var(--text-color-secondary)", margin: "0.25rem 0 0.75rem" }}>or</p>
-                <button style={{ ...mBtnSecondary, fontSize: 11, margin: "0 auto" }}>Browse Files</button>
+                <button style={{ ...btnSecondary, fontSize: 11, margin: "0 auto" }}>Browse Files</button>
               </div>
 
-              {/* Customer */}
               <div>
                 <label style={mLabel}>Customer</label>
-                <select
-                  value={selectedCustomer}
-                  onChange={e => setSelectedCustomer(e.target.value)}
-                  style={mInput}
-                >
+                <select value={selectedCustomer} onChange={e => setSelectedCustomer(e.target.value)} style={mInput}>
                   <option value="">Select customer</option>
-                  {uniqueReportCustomers.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  {uniqueReportCustomers.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
 
-              {/* Asset */}
               <div>
                 <label style={mLabel}>Asset</label>
-                <select
-                  value={selectedAsset}
-                  onChange={e => setSelectedAsset(e.target.value)}
-                  style={mInput}
-                >
+                <select value={selectedAsset} onChange={e => setSelectedAsset(e.target.value)} style={mInput}>
                   <option value="">Select asset</option>
-                  {uniqueReportAssets.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  {uniqueReportAssets.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
 
-              {/* Resource Type — system-filled, read-only */}
               <div>
                 <label style={mLabel}>Resource Type</label>
                 <div style={{
-                  ...mInput,
-                  display: "flex", alignItems: "center", gap: 8,
+                  ...mInput, display: "flex", alignItems: "center", gap: 8,
                   background: "var(--surface-section)",
                   color: autoResourceType ? "var(--text-color)" : "var(--text-color-secondary)",
                   cursor: "default", userSelect: "none",
                 }}>
                   {autoResourceType
                     ? <TypePill type={autoResourceType} />
-                    : <span style={{ fontSize: 12, fontStyle: "italic" }}>Auto-detected from asset</span>
-                  }
+                    : <span style={{ fontSize: 12, fontStyle: "italic" }}>Auto-detected from asset</span>}
                 </div>
               </div>
 
-              {/* Footer */}
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", paddingTop: "0.25rem", borderTop: "1px solid var(--surface-border)" }}>
-                <button style={mBtnSecondary} onClick={() => setUploadModalOpen(false)}>Cancel</button>
-                <button style={mBtnPrimary}>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: 4, borderTop: BORDER }}>
+                <button style={btnSecondary} onClick={() => setUploadModalOpen(false)}>Cancel</button>
+                <button style={btnPrimary}>
                   <i className="pi pi-upload" style={{ fontSize: 11 }} />
                   Upload
                 </button>
@@ -413,13 +277,12 @@ export default function RealTimeOperationsPage() {
         )
       })()}
 
-      {/* ── Underline Tab Bar ── */}
-      <div className="flex items-end justify-between mb-6"
-        style={{ borderBottom: "1px solid var(--surface-border)" }}>
-        <div className="flex items-end gap-0">
+      {/* ── Tab Bar ── */}
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", borderBottom: BORDER, marginBottom: 24 }}>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 0 }}>
           {[
             { label: "Reports Repository", icon: "pi pi-file" },
-            { label: "Daily Log", icon: "pi pi-list" },
+            { label: "Daily Log",          icon: "pi pi-list" },
           ].map((tab, i) => {
             const active = activeTab === i
             return (
@@ -427,17 +290,13 @@ export default function RealTimeOperationsPage() {
                 key={tab.label}
                 onClick={() => setActiveTab(i)}
                 style={{
-                  display: "flex", alignItems: "center", gap: "0.4rem",
-                  padding: "0.65rem 1.1rem",
-                  background: "transparent", border: "none", cursor: "pointer",
-                  fontSize: 13,
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "0.65rem 1.1rem", background: "transparent", border: "none",
+                  cursor: "pointer", fontSize: 13,
                   fontWeight: active ? 600 : 400,
                   color: active ? "#cc1111" : "var(--text-color-secondary)",
                   borderBottom: active ? "2px solid #cc1111" : "2px solid transparent",
-                  marginBottom: -1,
-                  transition: "color 0.15s",
-                  outline: "none",
-                  whiteSpace: "nowrap",
+                  marginBottom: -1, outline: "none", whiteSpace: "nowrap",
                 }}
               >
                 <i className={tab.icon} style={{ fontSize: 12 }} />
@@ -446,14 +305,13 @@ export default function RealTimeOperationsPage() {
             )
           })}
         </div>
-
-        <div className="pb-2 flex items-center">
+        <div style={{ paddingBottom: 8 }}>
           {activeTab === 1 && (
             <button
               onClick={() => dailyLogRef.current?.triggerShiftLogout()}
               style={{
                 display: "flex", alignItems: "center", gap: 6,
-                background: "none", border: "1px solid var(--surface-border)", borderRadius: 6,
+                background: "none", border: BORDER, borderRadius: 6,
                 fontSize: 12, fontWeight: 500, padding: "0.3rem 0.75rem",
                 color: "var(--text-color-secondary)", cursor: "pointer",
               }}
@@ -472,9 +330,8 @@ export default function RealTimeOperationsPage() {
           {(() => {
             const validated = filteredReports.filter(r => r.validation1 && r.validation2).length
             const pending   = filteredReports.filter(r => !r.validation1 || !r.validation2).length
-            const KBORDER = "1px solid var(--surface-border)"
             return (
-              <div style={{ display: "inline-flex", alignItems: "center", gap: "1rem", padding: "0.5rem 0.875rem", borderRadius: 10, background: "var(--surface-card)", border: KBORDER, marginBottom: "1.25rem" }}>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 16, padding: "0.5rem 0.875rem", borderRadius: 10, background: "var(--surface-card)", border: BORDER, marginBottom: 20 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div style={{ width: 26, height: 26, borderRadius: 6, background: "rgba(204,17,17,0.10)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <i className="pi pi-file" style={{ fontSize: 12, color: "#cc1111" }} />
@@ -499,43 +356,172 @@ export default function RealTimeOperationsPage() {
               </div>
             )
           })()}
-          {filterBar(
-            "report",
-            reportStartDate, setReportStartDate,
-            reportEndDate, setReportEndDate,
-            uniqueReportCustomers, reportFilterCustomer, setReportFilterCustomer,
-            uniqueReportAssets, reportFilterAsset, setReportFilterAsset,
-            uniqueReportResourceTypes, reportFilterResourceType, setReportFilterResourceType,
-            reportFilterQuery, setReportFilterQuery,
-          )}
-          <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid var(--surface-border)" }}>
-            <DataTable
-              value={filteredReports}
-              dataKey="id"
-              expandedRows={expandedReportRows}
-              onRowToggle={e => setExpandedReportRows(e.data as DataTableExpandedRows)}
-              rowExpansionTemplate={reportExpansionTemplate}
-              size="small"
-              emptyMessage="No reports match the current filters."
-              style={{ background: "var(--surface-card)" }}
-              pt={{
-                thead: { style: { background: "var(--surface-card)" } },
-                tbody: { style: { background: "var(--surface-card)" } },
-                column: {
-                  headerCell: { style: tableHeaderStyle },
-                  bodyCell: { style: tableCellStyle },
-                },
-              }}
-            >
-              <Column expander style={{ width: "2.5rem" }} />
-              <Column field="report" header="Report" sortable style={{ minWidth: "260px" }} />
-              <Column field="uploadedDate" header="Uploaded" sortable style={{ width: "110px" }} />
-              <Column header="Type" body={reportResourceTypeBody} style={{ width: "80px" }} />
-              <Column field="customer" header="Customer" sortable style={{ minWidth: "155px" }} />
-              <Column field="asset" header="Asset" sortable style={{ minWidth: "130px" }} />
-              <Column header="Validation" body={reportValidationBody} style={{ width: "95px" }} />
-              <Column header="" body={reportActionsBody} style={{ width: "80px" }} />
-            </DataTable>
+
+          {/* Filter bar */}
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 20 }}>
+            <div style={{ position: "relative", flex: 1, minWidth: 160 }}>
+              <i className="pi pi-search" style={{
+                position: "absolute", left: "0.6rem", top: "50%", transform: "translateY(-50%)",
+                fontSize: 11, color: "var(--text-color-secondary)", pointerEvents: "none", zIndex: 1,
+              }} />
+              <input
+                value={reportFilterQuery}
+                onChange={e => setReportFilterQuery(e.target.value)}
+                placeholder="Search..."
+                style={{ ...nativeInput, width: "100%", paddingLeft: "1.85rem" }}
+              />
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 8px", borderRadius: 6, background: "var(--surface-card)", border: BORDER, height: CTRL_H, boxSizing: "border-box" }}>
+              <i className="pi pi-calendar" style={{ fontSize: 11, color: "var(--text-color-secondary)", flexShrink: 0 }} />
+              <input type="date" value={reportStartDate} onChange={e => setReportStartDate(e.target.value)}
+                style={{ background: "transparent", border: "none", outline: "none", fontSize: 12, color: "var(--text-color)", cursor: "pointer" }} />
+              <span style={{ color: "var(--text-color-secondary)", fontSize: 11, padding: "0 2px" }}>—</span>
+              <input type="date" value={reportEndDate} onChange={e => setReportEndDate(e.target.value)}
+                style={{ background: "transparent", border: "none", outline: "none", fontSize: 12, color: "var(--text-color)", cursor: "pointer" }} />
+            </div>
+
+            <select value={reportFilterCustomer ?? ""} onChange={e => setReportFilterCustomer(e.target.value || null)} style={{ ...nativeSelect, minWidth: 130 }}>
+              <option value="">Customer</option>
+              {uniqueReportCustomers.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+            <select value={reportFilterAsset ?? ""} onChange={e => setReportFilterAsset(e.target.value || null)} style={{ ...nativeSelect, minWidth: 120 }}>
+              <option value="">Asset</option>
+              {uniqueReportAssets.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+            <select value={reportFilterResourceType ?? ""} onChange={e => setReportFilterResourceType(e.target.value || null)} style={{ ...nativeSelect, minWidth: 90 }}>
+              <option value="">Type</option>
+              {uniqueReportResourceTypes.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+
+            <button onClick={() => setUploadModalOpen(true)} style={btnPrimary}>
+              <i className="pi pi-upload" style={{ fontSize: 11 }} />
+              Upload
+            </button>
+          </div>
+
+          {/* Split layout: table + PDF viewer */}
+          <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+
+            {/* Table */}
+            <div style={{ flex: previewReport ? "0 0 calc(50% - 8px)" : "1 1 100%", minWidth: 0, transition: "flex 0.2s" }}>
+              <div style={{ borderRadius: 12, overflow: "hidden", border: BORDER }}>
+                <DataTable
+                  value={filteredReports}
+                  dataKey="id"
+                  size="small"
+                  emptyMessage="No reports match the current filters."
+                  style={{ background: "var(--surface-card)" }}
+                  pt={{
+                    thead: { style: { background: "var(--surface-card)" } },
+                    tbody: { style: { background: "var(--surface-card)" } },
+                    column: {
+                      headerCell: { style: thStyle },
+                      bodyCell:   { style: tdStyle },
+                    },
+                  }}
+                >
+                  <Column field="report"       header="Report"     sortable style={{ minWidth: 200 }} />
+                  <Column field="uploadedDate" header="Uploaded"   sortable style={{ width: 110 }} />
+                  <Column header="Type"        body={reportResourceTypeBody} style={{ width: 80 }} />
+                  <Column field="customer"     header="Customer"   sortable style={{ minWidth: previewReport ? 100 : 155 }} />
+                  <Column field="asset"        header="Asset"      sortable style={{ minWidth: previewReport ? 80 : 130 }} />
+                  <Column header="Validation"  body={reportValidationBody}   style={{ width: 90 }} />
+                  <Column header=""            body={reportActionsBody}       style={{ width: 72 }} />
+                </DataTable>
+              </div>
+            </div>
+
+            {/* PDF viewer panel */}
+            {previewReport && (
+              <div style={{
+                flex: "0 0 calc(50% - 8px)", position: "sticky", top: 16,
+                border: BORDER, borderRadius: 12, overflow: "hidden",
+                background: "var(--surface-card)", display: "flex", flexDirection: "column",
+                maxHeight: "calc(100vh - 120px)",
+              }}>
+                {/* Toolbar */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: BORDER, flexShrink: 0 }}>
+                  <i className="pi pi-file-pdf" style={{ fontSize: 13, color: "#cc1111" }} />
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-color)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {previewReport.report}.pdf
+                  </span>
+                  <span style={{ fontSize: 11, color: "var(--text-color-secondary)", flexShrink: 0 }}>1 / 1</span>
+                  <button title="Download" style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "var(--text-color-secondary)", display: "inline-flex", alignItems: "center" }}>
+                    <i className="pi pi-download" style={{ fontSize: 12 }} />
+                  </button>
+                  <button onClick={() => setPreviewReport(null)} title="Close" style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "var(--text-color-secondary)", display: "inline-flex", alignItems: "center" }}>
+                    <i className="pi pi-times" style={{ fontSize: 12 }} />
+                  </button>
+                </div>
+
+                {/* Document area */}
+                <div style={{ flex: 1, overflowY: "auto", background: "#3a3a3a", padding: 20, display: "flex", justifyContent: "center" }}>
+                  <div style={{
+                    width: "100%", maxWidth: 520, minHeight: 680,
+                    background: "#fff", borderRadius: 4,
+                    boxShadow: "0 4px 24px rgba(0,0,0,0.35)",
+                    padding: "40px 48px",
+                    display: "flex", flexDirection: "column", gap: 20,
+                    color: "#1a1a1a",
+                  }}>
+                    {/* Header */}
+                    <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "2px solid #cc1111", paddingBottom: 16 }}>
+                      <div>
+                        <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.12em", color: "#888", marginBottom: 2 }}>Ammper Power</div>
+                        <div style={{ fontSize: 12, fontWeight: 800, color: "#2d7a2d" }}>Power Sphere</div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: "#1a1a1a", marginTop: 8, maxWidth: 260 }}>{previewReport.report}</div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.1em", color: "#888", marginBottom: 2 }}>Report Date</div>
+                        <div style={{ fontSize: 12, fontWeight: 600 }}>{previewReport.uploadedDate}</div>
+                        <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.1em", color: "#888", marginTop: 8, marginBottom: 2 }}>Resource Type</div>
+                        <div style={{ fontSize: 12, fontWeight: 600 }}>{previewReport.resourceType}</div>
+                      </div>
+                    </div>
+
+                    {/* Meta */}
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {[previewReport.customer, previewReport.asset].map(v => (
+                        <span key={v} style={{ fontSize: 11, padding: "2px 10px", borderRadius: 20, background: "#f3f4f6", color: "#374151" }}>{v}</span>
+                      ))}
+                    </div>
+
+                    {/* Body */}
+                    <p style={{ fontSize: 12, lineHeight: 1.7, color: "#374151", margin: 0 }}>
+                      This report provides a comprehensive analysis of operational performance for <strong>{previewReport.asset}</strong> during the reporting period. Key metrics indicate stable generation output with minor variance from forecasted levels.
+                    </p>
+
+                    {/* Compliance */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                      {[["ERCOT Protocols", "Compliant", "#2d7a2d"], ["NERC Standards", "Compliant", "#2d7a2d"], ["Internal SLA", "Met", "#1a5ca8"]].map(([label, val, color]) => (
+                        <div key={label} style={{ padding: "10px 12px", borderRadius: 8, background: "#f9fafb", border: "1px solid #e5e7eb" }}>
+                          <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: "#888", marginBottom: 4 }}>{label}</div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color }}>{val}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Charts */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                      {[
+                        { label: "Generation Output (MW)", bars: [65, 78, 82, 71, 88, 92, 85, 79, 83, 90, 87, 81], color: "#cc1111" },
+                        { label: "Response Time (sec)",    bars: [45, 52, 38, 41, 55, 48, 42, 50, 44, 39, 47, 43], color: "#1a5ca8" },
+                      ].map(({ label, bars, color }) => (
+                        <div key={label} style={{ padding: "10px 12px", borderRadius: 8, background: "#f9fafb", border: "1px solid #e5e7eb" }}>
+                          <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: "#888", marginBottom: 8 }}>{label}</div>
+                          <div style={{ height: 48, display: "flex", alignItems: "flex-end", gap: 2 }}>
+                            {bars.map((v, i) => (
+                              <div key={i} style={{ flex: 1, borderRadius: "2px 2px 0 0", height: `${v}%`, background: color, opacity: 0.8 }} />
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
