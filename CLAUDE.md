@@ -160,4 +160,5 @@ app/
     meter-readings/         → Meter readings
     retail-customer/        → coming soon
     demand-response/        → coming soon
+    account-manager-console/ → AMC, opened from the header user menu (coming soon)
 ```
