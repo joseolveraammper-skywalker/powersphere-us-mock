@@ -8,6 +8,7 @@ import { PrimeThemeLoader } from '@/components/prime-theme-loader'
 import 'primereact/resources/themes/lara-dark-teal/theme.css'
 import 'primereact/resources/primereact.css'
 import 'primeicons/primeicons.css'
+import '@powersphere/shared-tw/styles.css'
 import './globals.css'
 
 const _geist = Geist({ subsets: ["latin"] });
