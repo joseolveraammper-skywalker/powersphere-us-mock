@@ -29,6 +29,7 @@ This guide is adapted from the real app's `docs/STYLE_GUIDE.md`. The MUI, SCSS, 
 | Stylesheet | `app/layout.tsx` → `import '@powersphere/shared-tw/styles.css'` |
 | i18n + snackbars | `components/shared-tw-provider.tsx` — initializes i18next in English, registers shared-tw's translations, mounts `AmpSnackbarProvider` |
 | Theme | Light by default (`components/providers.tsx`). shared-tw has no dark theme. |
+| Reference page | `app/shared-tw-example/page.tsx` → <http://localhost:3000/shared-tw-example>. A working list screen using the patterns below — start new screens from it. |
 
 **Updating the package:** in `frontend-power-sphere-usa` (after installing the new version there) run
 `npm pack node_modules/@powersphere/shared-tw --pack-destination <mock>/vendor`, then here `pnpm add ./vendor/powersphere-shared-tw-<version>.tgz`, delete the old tarball, and restart dev with a clean cache (`rm -rf .next`) — Next doesn't hot-reload CSS from `node_modules`. Keep the version equal to what `frontend-power-sphere-usa` pins so mockups match production.

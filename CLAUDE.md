@@ -18,6 +18,7 @@ Mockups for **Power Sphere USA**, an enterprise energy operations platform. Next
 - **Don't use** PrimeReact, PrimeIcons, shadcn (`components/ui/`), or the mock's own Tailwind classes in new screens.
 - **Client components only.** The package has no `"use client"` banner — any file that imports from `@powersphere/shared-tw` must start with `"use client"`.
 - List pages follow the canonical layout and filter-bar order (Primary filters → Refresh → spacer → Search → Actions → Export → Advanced filters).
+- **Reference page:** `app/shared-tw-example/page.tsx` (`/shared-tw-example`) is a working list screen — header + create button, filter bar, table with chips/status/pagination, dialog, toast. Copy its structure when starting a new list screen.
 
 ## Legacy screens
 
