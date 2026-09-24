@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { CounterpartyProvider } from '@/lib/counterparty-context'
+import { AccountManagerProvider } from '@/lib/account-manager-context'
 import { Providers } from '@/components/providers'
 import { PrimeThemeLoader } from '@/components/prime-theme-loader'
 import 'primereact/resources/themes/lara-dark-teal/theme.css'
@@ -46,7 +47,9 @@ export default function RootLayout({
         <Providers>
           <PrimeThemeLoader />
           <CounterpartyProvider>
-            {children}
+            <AccountManagerProvider>
+              {children}
+            </AccountManagerProvider>
           </CounterpartyProvider>
         </Providers>
         <Analytics />
