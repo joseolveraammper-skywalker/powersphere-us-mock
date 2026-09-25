@@ -1,0 +1,30 @@
+/*
+ * AmpBox / AmpStack / AmpGrid resolve bg, border, rounded and shadow props to these host variables.
+ * shared-tw's stylesheet doesn't define them, and globals.css uses `@theme inline`, which never emits
+ * them, so without this file those props silently render nothing. Values point at shared-tw's own
+ * defaults so layout primitives match the rest of the Amp* components. The radius/shadow fallbacks are
+ * required: shared-tw declares --ps-radius-* and --ps-shadow-* in terms of themselves, which leaves them empty.
+ */
+:root {
+  --color-background: var(--ps-background, #f8fafc);
+  --color-foreground: var(--ps-foreground, #0f1729);
+  --color-card: var(--ps-card, #fff);
+  --color-muted: var(--ps-muted, #f1f5f9);
+  --color-border: var(--ps-border, #d0d5dd);
+  --color-primary: var(--ps-primary, #d32f2f);
+  --color-secondary: var(--ps-secondary, #f1f5f9);
+  --color-success: var(--ps-success, #21c45d);
+  --color-destructive: var(--ps-destructive, #c62828);
+  --color-warning: var(--ps-warning, #f59e0b);
+  --color-info: var(--ps-info, #3b82f6);
+
+  --radius-sm: var(--ps-radius-sm, .25rem);
+  --radius-md: var(--ps-radius-md, .5rem);
+  --radius-lg: var(--ps-radius-lg, .75rem);
+  --radius-xl: var(--ps-radius-xl, 1rem);
+
+  --shadow-xs: var(--ps-shadow-xs, 0 1px 2px 0 #0000000d);
+  --shadow-sm: var(--ps-shadow-sm, 0 1px 3px 0 #0000001a, 0 1px 2px -1px #0000001a);
+  --shadow-md: var(--ps-shadow-md, 0 4px 6px -1px #0000001a, 0 2px 4px -2px #0000001a);
+  --shadow-lg: var(--ps-shadow-lg, 0 10px 15px -3px #0000001a, 0 4px 6px -4px #0000001a);
+}

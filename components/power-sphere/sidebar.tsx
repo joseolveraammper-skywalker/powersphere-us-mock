@@ -1,314 +1,183 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import Image from "next/image"
+import { ChevronDown, ChevronRight, Compass, IdCard, LogOut, User } from "lucide-react"
+import { AmpBox, AmpCollapse, AmpIcon, AmpStack, AmpTypography } from "@powersphere/shared-tw"
 
 type NavChild = {
   name: string
   href: string
-  icon: string
 }
 
 type NavItem = {
   name: string
-  icon: string
   href?: string
   children?: NavChild[]
+  defaultOpen?: boolean
 }
 
 const navItems: NavItem[] = [
-  { name: "Retail Customer",  icon: "pi pi-users",     href: "/retail-customer" },
-  { name: "Meter Readings",   icon: "pi pi-chart-bar", href: "/meter-readings" },
+  { name: "Retail Customer", href: "/retail-customer" },
+  { name: "Meter Readings",  href: "/meter-readings" },
   {
     name: "Operations",
-    icon: "pi pi-cog",
+    defaultOpen: true,
     children: [
-      { name: "Client Configuration",  icon: "pi pi-sliders-h", href: "/client-configuration" },
-      { name: "Document Repository",   icon: "pi pi-folder",    href: "/document-repository" },
-      { name: "Real Time Operations",  icon: "pi pi-desktop",   href: "/real-time-operations" },
-      { name: "Prospect",              icon: "pi pi-briefcase", href: "/prospect" },
+      { name: "Client Configuration", href: "/client-configuration" },
+      { name: "Document Repository",  href: "/document-repository" },
+      { name: "Real Time Operations", href: "/real-time-operations" },
+      { name: "Prospect",             href: "/prospect" },
     ],
   },
   {
     name: "Market Desk",
-    icon: "pi pi-chart-line",
     children: [
-      { name: "Market Transactions", icon: "pi pi-arrow-right-arrow-left", href: "/market-transactions/scheduling" },
+      { name: "Market Transactions", href: "/market-transactions/scheduling" },
     ],
   },
-  { name: "ETRM",            icon: "pi pi-database", href: "/etrm" },
-  { name: "Demand Response", icon: "pi pi-bolt",     href: "/demand-response" },
+  { name: "ETRM",            href: "/etrm" },
+  { name: "Demand Response", href: "/demand-response" },
 ]
 
-const BORDER = "1px solid var(--surface-border)"
+const DIVIDER = "1px solid var(--color-border)"
+
+// No shipped ps: class covers a left-only border, so width/style go inline and the class sets the color
+const rowStyle: CSSProperties = { borderLeftWidth: 2, borderLeftStyle: "solid", textDecoration: "none" }
+const rowClass = (active: boolean) =>
+  "ps:block ps:w-full ps:text-left ps:cursor-pointer ps:rounded-md ps:transition-colors " +
+  (active
+    ? "ps:bg-primary/10 ps:text-primary ps:border-primary"
+    : "ps:text-muted-foreground ps:border-transparent ps:hover:bg-muted ps:hover:text-foreground")
+
+function RowContent({ icon, label, active, trailing }: { icon?: ReactNode; label: string; active?: boolean; trailing?: ReactNode }) {
+  return (
+    <AmpStack direction="row" align="center" justify="between" gap="sm" px="sm" py={6}>
+      <AmpStack direction="row" align="center" gap="sm" minW={0}>
+        {icon}
+        <AmpBox truncate minW={0}>
+          <AmpTypography variant="body-sm" color="inherit" weight={active ? "semibold" : "normal"}>{label}</AmpTypography>
+        </AmpBox>
+      </AmpStack>
+      {trailing}
+    </AmpStack>
+  )
+}
+
+function NavLink({ href, label, active }: { href: string; label: string; active: boolean }) {
+  return (
+    <Link href={href} className={rowClass(active)} style={rowStyle} aria-current={active ? "page" : undefined}>
+      <RowContent label={label} active={active} />
+    </Link>
+  )
+}
+
+function ActionRow({ icon, label }: { icon: ReactNode; label: string }) {
+  return (
+    <button type="button" className={rowClass(false)} style={{ ...rowStyle, background: "none" }}>
+      <RowContent icon={icon} label={label} />
+    </button>
+  )
+}
 
 export function Sidebar() {
   const pathname = usePathname()
+  const hasActiveChild = (item: NavItem) => (item.children ?? []).some(c => c.href === pathname)
 
-  const isChildActive = (parentName: string) => {
-    const parent = navItems.find((item) => item.name === parentName)
-    return (parent?.children || []).some((c) => c.href === pathname)
-  }
-
-  const [operationsOpen, setOperationsOpen] = useState<boolean>(isChildActive("Operations") || true)
-  const [marketDeskOpen, setMarketDeskOpen] = useState<boolean>(isChildActive("Market Desk") || false)
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(navItems.filter(i => i.children).map(i => [i.name, !!i.defaultOpen || hasActiveChild(i)]))
+  )
 
   useEffect(() => {
-    if (isChildActive("Operations")) setOperationsOpen(true)
-    if (isChildActive("Market Desk")) setMarketDeskOpen(true)
+    const activeGroup = navItems.find(hasActiveChild)
+    if (activeGroup) setOpenGroups(g => ({ ...g, [activeGroup.name]: true }))
   }, [pathname])
 
   return (
-    <aside style={{
-      width: 216,
-      flexShrink: 0,
-      display: "flex",
-      flexDirection: "column",
-      height: "100%",
-      background: "var(--surface-card)",
-      borderRight: BORDER,
-    }}>
-
-      {/* Logo */}
-      <div style={{ padding: "1rem 1.25rem 0.875rem", borderBottom: BORDER, display: "flex", alignItems: "center" }}>
+    <AmpStack as="aside" w={216} h="full" gap="none" bg="card" style={{ flexShrink: 0, borderRight: DIVIDER }}>
+      <AmpBox px="md" py="md" style={{ borderBottom: DIVIDER }}>
         <Image
           src="/powersphere-logo.png"
           alt="Ammper Power Sphere"
           width={148}
           height={58}
           priority
-          style={{ width: "auto", height: "44px", objectFit: "contain" }}
+          style={{ width: "auto", height: 44, objectFit: "contain" }}
         />
-      </div>
+      </AmpBox>
 
-      {/* Nav */}
-      <nav style={{ flex: 1, overflowY: "auto", padding: "0.625rem 0.5rem" }}>
-        <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 1 }}>
-          {navItems.map((item) => {
-
-            if (item.children) {
-              const isOpen =
-                item.name === "Operations" ? operationsOpen :
-                item.name === "Market Desk" ? marketDeskOpen : false
-              const toggle =
-                item.name === "Operations" ? setOperationsOpen :
-                item.name === "Market Desk" ? setMarketDeskOpen : null
-              const groupActive = item.children.some((c) => c.href === pathname)
-
-              return (
-                <li key={item.name}>
-                  <button
-                    onClick={() => toggle && toggle((o) => !o)}
-                    style={{
-                      width: "100%",
-                      display: "flex", alignItems: "center", justifyContent: "space-between",
-                      padding: "0.45rem 0.625rem",
-                      borderRadius: 6,
-                      border: "none",
-                      cursor: "pointer",
-                      background: groupActive ? "rgba(204,17,17,0.07)" : "transparent",
-                      color: groupActive ? "#cc1111" : "var(--text-color-secondary)",
-                    }}
-                    onMouseEnter={e => { if (!groupActive) (e.currentTarget as HTMLElement).style.background = "var(--surface-hover)" }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = groupActive ? "rgba(204,17,17,0.07)" : "transparent" }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <i className={item.icon} style={{ fontSize: 12, width: 14, textAlign: "center", flexShrink: 0 }} />
-                      <span style={{ fontSize: 12, fontWeight: 500 }}>{item.name}</span>
-                    </div>
-                    <i
-                      className="pi pi-angle-down"
-                      style={{
-                        fontSize: 11,
-                        flexShrink: 0,
-                        transition: "transform 0.2s",
-                        transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)",
-                      }}
-                    />
-                  </button>
-
-                  {isOpen && (
-                    <ul style={{ listStyle: "none", margin: "2px 0 2px 8px", padding: 0, display: "flex", flexDirection: "column", gap: 1 }}>
-                      {item.children.map((child) => {
-                        const active = pathname === child.href
-                        return (
-                          <li key={child.name}>
-                            <Link
-                              href={child.href}
-                              style={{
-                                display: "flex", alignItems: "center", gap: 8,
-                                padding: "0.4rem 0.625rem",
-                                borderRadius: 6,
-                                fontSize: 12,
-                                fontWeight: active ? 600 : 400,
-                                color: active ? "#cc1111" : "var(--text-color-secondary)",
-                                background: active ? "rgba(204,17,17,0.08)" : "transparent",
-                                borderLeft: active ? "2px solid #cc1111" : "2px solid transparent",
-                                textDecoration: "none",
-                                transition: "background 0.15s, color 0.15s",
-                              }}
-                              onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = "var(--surface-hover)" }}
-                              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = active ? "rgba(204,17,17,0.08)" : "transparent" }}
-                            >
-                              <i className={child.icon} style={{ fontSize: 11, width: 14, textAlign: "center", flexShrink: 0 }} />
-                              {child.name}
-                            </Link>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  )}
-                </li>
-              )
+      <AmpBox as="nav" grow overflow="auto" p="sm">
+        <AmpStack gap="xs">
+          {navItems.map(item => {
+            if (!item.children) {
+              return <NavLink key={item.name} href={item.href!} label={item.name} active={pathname === item.href} />
             }
 
-            const active = pathname === item.href
+            const groupActive = hasActiveChild(item)
             return (
-              <li key={item.name}>
-                <Link
-                  href={item.href!}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 8,
-                    padding: "0.45rem 0.625rem",
-                    borderRadius: 6,
-                    fontSize: 12,
-                    fontWeight: active ? 600 : 400,
-                    color: active ? "#cc1111" : "var(--text-color-secondary)",
-                    background: active ? "rgba(204,17,17,0.08)" : "transparent",
-                    borderLeft: active ? "2px solid #cc1111" : "2px solid transparent",
-                    textDecoration: "none",
-                    transition: "background 0.15s, color 0.15s",
-                  }}
-                  onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = "var(--surface-hover)" }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = active ? "rgba(204,17,17,0.08)" : "transparent" }}
-                >
-                  <i className={item.icon} style={{ fontSize: 12, width: 14, textAlign: "center", flexShrink: 0 }} />
-                  {item.name}
-                </Link>
-              </li>
+              <AmpCollapse
+                key={item.name}
+                open={openGroups[item.name]}
+                onOpenChange={open => setOpenGroups(g => ({ ...g, [item.name]: open }))}
+                trigger={({ open, toggle }) => (
+                  <button type="button" onClick={toggle} aria-expanded={open} className={rowClass(groupActive)} style={{ ...rowStyle, background: groupActive ? undefined : "none" }}>
+                    <RowContent
+                      label={item.name}
+                      active={groupActive}
+                      trailing={<AmpIcon icon={open ? ChevronDown : ChevronRight} size="xs" color="inherit" />}
+                    />
+                  </button>
+                )}
+              >
+                <AmpStack gap="xs" pl="sm" pt="xs">
+                  {item.children.map(child => (
+                    <NavLink key={child.name} href={child.href} label={child.name} active={pathname === child.href} />
+                  ))}
+                </AmpStack>
+              </AmpCollapse>
             )
           })}
-        </ul>
-      </nav>
+        </AmpStack>
+      </AmpBox>
 
-      {/* Bottom section */}
-      <div style={{ borderTop: BORDER }}>
+      <AmpStack gap="none" style={{ borderTop: DIVIDER }}>
+        <AmpStack direction="row" align="center" gap="sm" px="md" py="sm" style={{ borderBottom: DIVIDER }}>
+          <AmpIcon icon={Compass} size="md" color="primary" />
+          <AmpTypography variant="caption" weight="semibold" color="primary" style={{ fontStyle: "italic" }}>
+            Empowering Businesses
+          </AmpTypography>
+        </AmpStack>
 
-        {/* Branding */}
-        <div style={{ padding: "0.5rem 0.75rem", borderBottom: BORDER }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Image
-              src="/powersphere-logo-icon.png"
-              alt="Ammper"
-              width={28}
-              height={28}
-              style={{ width: 28, height: 28, objectFit: "contain", flexShrink: 0 }}
-              onError={(e) => {
-                const target = e.currentTarget as HTMLImageElement
-                target.style.display = "none"
-                const fallback = target.nextElementSibling as HTMLElement
-                if (fallback) fallback.style.display = "flex"
-              }}
-            />
-            <i className="pi pi-compass" style={{ fontSize: 16, color: "#cc1111", display: "none", flexShrink: 0 }} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: "#cc1111", fontStyle: "italic" }}>
-              Empowering Businesses
-            </span>
-          </div>
-        </div>
+        <AmpStack gap="xs" p="sm" style={{ borderBottom: DIVIDER }}>
+          <ActionRow icon={<AmpIcon icon={IdCard} size="sm" color="inherit" />} label="Contact Us" />
+          <ActionRow icon={<AmpTypography variant="body-sm" as="span" aria-hidden>🇺🇸</AmpTypography>} label="English" />
+          <ActionRow icon={<AmpIcon icon={LogOut} size="sm" color="inherit" />} label="Logout" />
+        </AmpStack>
 
-        {/* Actions */}
-        <div style={{ padding: "0.375rem 0.5rem", borderBottom: BORDER, display: "flex", flexDirection: "column", gap: 1 }}>
-          {/* Contact Us */}
-          <button style={{
-            width: "100%", display: "flex", alignItems: "center", gap: 8,
-            padding: "0.4rem 0.625rem", borderRadius: 6,
-            border: "none", cursor: "pointer", background: "transparent",
-            color: "var(--text-color-secondary)",
-          }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "var(--surface-hover)" }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent" }}
-          >
-            <i className="pi pi-id-card" style={{ fontSize: 12, width: 14, textAlign: "center", flexShrink: 0 }} />
-            <span style={{ fontSize: 12 }}>Contact Us</span>
-          </button>
+        <AmpStack gap="xs" px="md" py="sm" align="start">
+          {["Privacy Notice", "Developer Documentation"].map(label => (
+            <button
+              key={label}
+              type="button"
+              className="ps:cursor-pointer ps:text-left ps:text-muted-foreground ps:hover:text-foreground ps:transition-colors"
+              style={{ background: "none", textDecoration: "underline dotted" }}
+            >
+              <AmpTypography variant="footnote" color="inherit">{label}</AmpTypography>
+            </button>
+          ))}
+        </AmpStack>
 
-          {/* Language */}
-          <button style={{
-            width: "100%", display: "flex", alignItems: "center", gap: 8,
-            padding: "0.4rem 0.625rem", borderRadius: 6,
-            border: "none", cursor: "pointer", background: "transparent",
-            color: "var(--text-color-secondary)",
-          }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "var(--surface-hover)" }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent" }}
-          >
-            <span style={{ fontSize: 12, width: 14, textAlign: "center", flexShrink: 0 }}>🇺🇸</span>
-            <span style={{ fontSize: 12 }}>English</span>
-          </button>
-
-          {/* Logout */}
-          <button style={{
-            width: "100%", display: "flex", alignItems: "center", gap: 8,
-            padding: "0.4rem 0.625rem", borderRadius: 6,
-            border: "none", cursor: "pointer", background: "transparent",
-            color: "var(--text-color-secondary)",
-          }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "var(--surface-hover)" }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent" }}
-          >
-            <i className="pi pi-sign-out" style={{ fontSize: 12, width: 14, textAlign: "center", flexShrink: 0 }} />
-            <span style={{ fontSize: 12 }}>Logout</span>
-          </button>
-        </div>
-
-        {/* Privacy Notice + Dev Docs */}
-        <div style={{ padding: "0.4rem 1.25rem", display: "flex", flexDirection: "column", gap: 3 }}>
-          <button style={{
-            background: "none", border: "none", cursor: "pointer", padding: 0,
-            fontSize: 11, color: "var(--text-color-secondary)",
-            textDecoration: "underline", textDecorationStyle: "dotted",
-            textAlign: "left",
-          }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = "var(--text-color)" }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = "var(--text-color-secondary)" }}
-          >
-            Privacy Notice
-          </button>
-          <button style={{
-            background: "none", border: "none", cursor: "pointer", padding: 0,
-            fontSize: 11, color: "var(--text-color-secondary)",
-            textDecoration: "underline", textDecorationStyle: "dotted",
-            textAlign: "left",
-          }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = "var(--text-color)" }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = "var(--text-color-secondary)" }}
-          >
-            Developer Documentation
-          </button>
-        </div>
-
-        {/* User footer */}
-        <div style={{
-          padding: "0.5rem 0.875rem",
-          borderTop: BORDER,
-          display: "flex", alignItems: "center", gap: 8,
-        }}>
-          <div style={{
-            width: 26, height: 26, borderRadius: 6,
-            background: "var(--surface-section)",
-            border: BORDER,
-            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-          }}>
-            <i className="pi pi-user" style={{ fontSize: 11, color: "var(--text-color-secondary)" }} />
-          </div>
-          <span style={{ fontSize: 11, color: "var(--text-color-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            admin@powersphere.com
-          </span>
-        </div>
-      </div>
-    </aside>
+        <AmpStack direction="row" align="center" gap="sm" px="md" py="sm" style={{ borderTop: DIVIDER }}>
+          <AmpStack w={26} h={26} align="center" justify="center" bg="muted" border rounded="sm" style={{ flexShrink: 0 }}>
+            <AmpIcon icon={User} size="xs" color="muted" />
+          </AmpStack>
+          <AmpBox truncate minW={0}>
+            <AmpTypography variant="footnote" color="muted">admin@powersphere.com</AmpTypography>
+          </AmpBox>
+        </AmpStack>
+      </AmpStack>
+    </AmpStack>
   )
 }

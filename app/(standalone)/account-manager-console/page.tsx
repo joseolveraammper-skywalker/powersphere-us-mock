@@ -1,9 +1,17 @@
 "use client"
 
-import React, { useEffect, useMemo, useRef, useState } from "react"
-import { DataTable, DataTableExpandedRows } from "primereact/datatable"
-import { Column } from "primereact/column"
-import { Dialog } from "primereact/dialog"
+import React, { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import {
+  getCoreRowModel, getPaginationRowModel, getSortedRowModel, useReactTable,
+  type ColumnDef, type ExpandedState, type SortingState,
+} from "@tanstack/react-table"
+import { ArrowRight, Calendar, ChevronDown, ChevronRight, Info, Network, Pencil, Plus, Trash2 } from "lucide-react"
+import {
+  AmpActionsButton, AmpAlert, AmpBox, AmpButton, AmpCard, AmpCheckbox, AmpChip, AmpDataTable, AmpDataTablePagination,
+  AmpDialog, AmpGrid, AmpIcon, AmpKpiCard, AmpMultiSelect, AmpOptionCard, AmpRefetchIcon, AmpSearchInput, AmpSelect,
+  AmpStack, AmpStatusIcon, AmpTabs, AmpTextArea, AmpTextInput, AmpTimePicker, AmpTooltip, AmpTypography,
+  Popover, PopoverContent, PopoverTrigger,
+} from "@powersphere/shared-tw"
 import { DashboardLayout } from "@/components/power-sphere/dashboard-layout"
 import { fmt } from "@/lib/retail-customer-mock"
 import {
@@ -16,57 +24,13 @@ import {
   DAY_LABEL, DAY_ORDER, MAX_SLOTS, activeScheduledSlot, formatDays, formatSlots,
   nextScheduledRun, validateSchedule, type IntelometrySchedule,
 } from "@/lib/intelometry-schedule"
-import { useTheme } from "next-themes"
 
-const BORDER = "1px solid var(--surface-border)"
-const CTRL_H = "30px"
-
-const nativeInput: React.CSSProperties = {
-  height: CTRL_H, padding: "0 0.5rem", fontSize: 12, border: BORDER, borderRadius: 6,
-  background: "var(--surface-card)", color: "var(--text-color)", outline: "none",
-  fontFamily: "inherit", boxSizing: "border-box",
-}
-const nativeSelect: React.CSSProperties = { ...nativeInput, cursor: "pointer" }
-
-const btnPrimary: React.CSSProperties = {
-  background: "#cc1111", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600,
-  padding: "0.35rem 0.875rem", color: "#fff", cursor: "pointer",
-  display: "inline-flex", alignItems: "center", gap: 6,
-}
-const btnSecondary: React.CSSProperties = {
-  background: "none", border: BORDER, borderRadius: 6, fontSize: 12, fontWeight: 500,
-  padding: "0.35rem 0.875rem", color: "var(--text-color)", cursor: "pointer",
-  display: "inline-flex", alignItems: "center", gap: 6,
-}
-
-const thStyle: React.CSSProperties = {
-  fontSize: 11, fontWeight: 600, padding: "8px 12px",
-  background: "var(--surface-section)", color: "var(--text-color-secondary)",
-}
-const tdStyle: React.CSSProperties = { fontSize: 12, padding: "8px 12px" }
-
-const tablePt = {
-  thead: { style: { background: "var(--surface-card)" } },
-  tbody: { style: { background: "var(--surface-card)" } },
-  column: { headerCell: { style: thStyle }, bodyCell: { style: tdStyle } },
-}
-
-const disabledStyle = (disabled: boolean): React.CSSProperties =>
-  disabled ? { opacity: 0.45, cursor: "not-allowed" } : {}
-
-const popoverStyle: React.CSSProperties = {
-  background: "var(--surface-card)", border: BORDER, borderRadius: 8,
-  boxShadow: "0 12px 30px rgba(0,0,0,0.25)",
-}
-const popoverHeading: React.CSSProperties = {
-  fontSize: 10, fontWeight: 700, color: "var(--text-color-secondary)",
-  textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8, whiteSpace: "nowrap",
-}
-const errorText: React.CSSProperties = { fontSize: 11, color: "#cc1111" }
-const fieldLabel: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: "var(--text-color)" }
-const checkboxStyle: React.CSSProperties = { width: 14, height: 14, margin: 0, accentColor: "#cc1111", cursor: "pointer" }
-const backdrop: React.CSSProperties = { position: "fixed", inset: 0, zIndex: 40 }
 const EMAIL_RE = /^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/
+const MONO = { fontFamily: "var(--ps-font-mono)" }
+const DIVIDER = "1px solid var(--color-border)"
+const asMultiChange = (h: (ids: string[]) => void) => h as unknown as (v: string) => void
+
+type ChipColor = React.ComponentProps<typeof AmpChip>["color"]
 
 // ── Status ─────────────────────────────────────────────────────────────────────
 type Status = "Pending email" | "Pending WP schedule" | "Welcome packet sent" | "Password email sent" | "Active" | "Inactive"
@@ -75,17 +39,13 @@ type Status = "Pending email" | "Pending WP schedule" | "Welcome packet sent" | 
 // instead of living in the work-queue dropdown.
 const STATUS_ORDER: Status[] = ["Pending email", "Pending WP schedule", "Welcome packet sent", "Password email sent", "Inactive"]
 
-const STATUS_COLOR: Record<Status, string> = {
-  "Pending email": "#d99a2b",
-  "Pending WP schedule": "#d9752e",
-  "Welcome packet sent": "#2f9188",
-  "Password email sent": "#7c5cd6",
-  "Active": "#2d7a2d",
-  "Inactive": "#c14a3e",
-}
-const tint = (hex: string, alpha: number) => {
-  const n = parseInt(hex.slice(1), 16)
-  return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${alpha})`
+const STATUS_CHIP: Record<Status, ChipColor> = {
+  "Pending email": "warning",
+  "Pending WP schedule": "orange",
+  "Welcome packet sent": "blue",
+  "Password email sent": "rose",
+  "Active": "success",
+  "Inactive": "destructive",
 }
 
 type Row = {
@@ -154,156 +114,78 @@ function toRow(
 }
 
 // ── Small UI pieces ────────────────────────────────────────────────────────────
-function StatusPill({ status }: { status: Status }) {
-  const color = STATUS_COLOR[status]
+function StatusChip({ status }: { status: Status }) {
+  return <span style={{ whiteSpace: "nowrap" }}><AmpChip color={STATUS_CHIP[status]} size="sm">{status}</AmpChip></span>
+}
+
+function SectionTitle({ title, titleAddon, hint, right }: { title: string; titleAddon?: ReactNode; hint?: string; right?: ReactNode }) {
   return (
-    <span style={{
-      display: "inline-flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
-      padding: "2px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600,
-      background: tint(color, 0.14), color,
-    }}>
-      <span style={{ width: 6, height: 6, borderRadius: "50%", background: color }} />
-      {status}
-    </span>
+    <AmpStack direction="row" justify="between" align="start" gap="sm">
+      <AmpStack gap="none">
+        <AmpStack direction="row" align="center" gap="xs">
+          <AmpTypography variant="body-sm" weight="semibold">{title}</AmpTypography>
+          {titleAddon}
+        </AmpStack>
+        {hint && <AmpTypography variant="caption" color="muted">{hint}</AmpTypography>}
+      </AmpStack>
+      {right}
+    </AmpStack>
   )
 }
 
-// Fixed positioning lets the tip escape the DataTable's scroll wrapper.
-function HoverTip({ tip, children, fixed }: { tip: React.ReactNode; children: React.ReactNode; fixed?: boolean }) {
-  const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
-  const tipStyle: React.CSSProperties = {
-    background: "#1a1a1a", color: "#fff", padding: "7px 10px", borderRadius: 6,
-    fontSize: 11, fontWeight: 500, lineHeight: 1.45, width: "max-content", maxWidth: 240,
-    textAlign: "left", whiteSpace: "normal", boxShadow: "0 6px 16px rgba(0,0,0,0.3)",
-    pointerEvents: "none", transform: "translateX(-50%)",
-  }
+function Panel({ children, grow }: { children: ReactNode; grow?: boolean }) {
   return (
-    <span
-      onMouseEnter={e => {
-        const r = e.currentTarget.getBoundingClientRect()
-        setPos({ x: r.left + r.width / 2, y: r.bottom + 8 })
-      }}
-      onMouseLeave={() => setPos(null)}
-      style={{ position: "relative", display: "inline-flex", lineHeight: 0 }}
-    >
+    <AmpStack gap="sm" p="md" bg="muted" border rounded="lg" style={grow ? { height: "100%" } : undefined}>
       {children}
-      {pos && (fixed
-        ? <span style={{ ...tipStyle, position: "fixed", left: pos.x, top: pos.y, zIndex: 3000 }}>{tip}</span>
-        : <span style={{ ...tipStyle, position: "absolute", left: "50%", top: "calc(100% + 8px)", zIndex: 3000 }}>{tip}</span>
-      )}
-    </span>
+    </AmpStack>
   )
 }
 
-function StepDot({ done, color }: { done: boolean; color: string }) {
+function EmptyNote({ children }: { children: ReactNode }) {
   return (
-    <span style={{
-      width: 17, height: 17, borderRadius: "50%", boxSizing: "border-box",
-      display: "inline-flex", alignItems: "center", justifyContent: "center",
-      background: done ? color : "var(--surface-card)", border: done ? "none" : BORDER,
-    }}>
-      {done && <i className="pi pi-check" style={{ fontSize: 8, color: "#fff", fontWeight: 700 }} />}
-    </span>
+    <AmpStack align="center" justify="center" p="md" border rounded="md" style={{ borderStyle: "dashed" }}>
+      <AmpTypography variant="caption" color="muted" align="center">{children}</AmpTypography>
+    </AmpStack>
   )
 }
 
-function Kpi({ value, label, color, tip, onClick, active, activeColor }: {
-  value: number; label: string; color: string; tip?: string; onClick?: () => void; active?: boolean; activeColor?: string
-}) {
-  const [hover, setHover] = useState(false)
-  return (
-    <div
-      onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        position: "relative", display: "flex", flexDirection: "column", gap: 2,
-        border: active ? `1px solid ${activeColor}` : hover ? "1px solid var(--text-color-secondary)" : BORDER,
-        background: active ? tint(activeColor!, 0.08) : "var(--surface-card)",
-        borderRadius: 10, padding: "10px 18px", minWidth: 120, cursor: onClick ? "pointer" : "default",
-      }}
-    >
-      <div style={{ fontSize: 20, fontWeight: 700, color }}>{value}</div>
-      <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-color-secondary)", whiteSpace: "nowrap" }}>{label}</div>
-      {tip && hover && (
-        <span style={{
-          position: "absolute", top: "calc(100% + 8px)", left: 0, zIndex: 30,
-          background: "#1a1a1a", color: "#fff", padding: "7px 10px", borderRadius: 6,
-          fontSize: 11, fontWeight: 500, lineHeight: 1.45, width: "max-content", maxWidth: 240,
-          boxShadow: "0 6px 16px rgba(0,0,0,0.3)", pointerEvents: "none",
-        }}>
-          {tip}
-        </span>
-      )}
-    </div>
-  )
+function Divider() {
+  return <AmpBox h={1} bg="border" />
 }
 
-function FixedPopover({ anchor, onClose, children }: { anchor: DOMRect; onClose: () => void; children: React.ReactNode }) {
-  useEffect(() => {
-    window.addEventListener("scroll", onClose, true)
-    window.addEventListener("resize", onClose)
-    return () => {
-      window.removeEventListener("scroll", onClose, true)
-      window.removeEventListener("resize", onClose)
-    }
-  }, [onClose])
-  return (
-    <>
-      <div onClick={onClose} style={{ ...backdrop, zIndex: 2000 }} />
-      <div style={{
-        ...popoverStyle, position: "fixed", left: anchor.left, top: anchor.bottom + 6, zIndex: 2001,
-        padding: "10px 12px", minWidth: 230, maxHeight: 220, overflowY: "auto",
-      }}>
-        {children}
-      </div>
-    </>
-  )
-}
+// KPI cards aren't interactive themselves, so clickable ones are wrapped in a bare button
+const bareButton: React.CSSProperties = { background: "none", padding: 0, border: 0, font: "inherit", color: "inherit" }
 
 // ── Page ───────────────────────────────────────────────────────────────────────
-const TABS = [
-  { key: "console", label: "Account Manager Console", icon: "pi pi-users" },
-  { key: "billing", label: "Billing Notice",          icon: "pi pi-file" },
-] as const
-type TabKey = typeof TABS[number]["key"]
-
 export default function AccountManagerConsolePage() {
-  const [active, setActive] = useState<TabKey>("console")
+  const [active, setActive] = useState("console")
 
   return (
     <DashboardLayout title="Account Manager Console">
-      <div style={{ display: "flex", gap: 0, borderBottom: BORDER, marginBottom: 20 }}>
-        {TABS.map(tab => (
-          <button key={tab.key} onClick={() => setActive(tab.key)} style={{
-            padding: "0.5rem 1rem", fontSize: 12, fontWeight: active === tab.key ? 600 : 400,
-            border: "none", borderBottom: active === tab.key ? "2px solid #cc1111" : "2px solid transparent",
-            background: "none", cursor: "pointer", color: active === tab.key ? "#cc1111" : "var(--text-color-secondary)",
-            display: "inline-flex", alignItems: "center", gap: 6,
-          }}>
-            <i className={tab.icon} style={{ fontSize: 12 }} />
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {active === "console" ? <Console /> : (
-        <div style={{
-          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, height: 256,
-          textAlign: "center",
-        }}>
-          <div style={{ fontSize: 14, color: "var(--text-color)" }}>Billing Notice</div>
-          <div style={{ fontSize: 12, color: "var(--text-color-secondary)", maxWidth: 420 }}>
-            This tab stays as-is for now — out of scope for this pass.
-          </div>
-        </div>
-      )}
+      <AmpTabs
+        aria-label="Account manager sections"
+        value={active}
+        onValueChange={setActive}
+        items={[
+          { value: "console", label: "Account Manager Console", content: <AmpBox pt="lg"><Console /></AmpBox> },
+          {
+            value: "billing", label: "Billing Notice",
+            content: (
+              <AmpStack h={256} align="center" justify="center" gap="xs">
+                <AmpTypography variant="body-sm">Billing Notice</AmpTypography>
+                <AmpTypography variant="caption" color="muted">This tab stays as-is for now — out of scope for this pass.</AmpTypography>
+              </AmpStack>
+            ),
+          },
+        ]}
+      />
     </DashboardLayout>
   )
 }
 
 // ── Console ────────────────────────────────────────────────────────────────────
 const ISSUE_BY_NAME = new Map(ACCOUNT_ISSUES.map(i => [i.name, i.reason]))
+const CREATOR_KINDS = Object.keys(CREATOR_KIND_LABEL) as CreatorKind[]
 
 function Console() {
   // Notify only records what was sent; it never changes an account's onboarding status.
@@ -312,13 +194,11 @@ function Console() {
   // Cross-status override for the Actions KPI; touching any status filter drops out of it.
   const [onlyFlagged, setOnlyFlagged] = useState(false)
   const [actionsOpen, setActionsOpen] = useState(false)
-  const [statusMenuOpen, setStatusMenuOpen] = useState(false)
   const [filter, setFilter] = useState("")
   const [hiddenCreators, setHiddenCreators] = useState<Partial<Record<CreatorKind, boolean>>>({ external: true })
-  const [creatorMenuOpen, setCreatorMenuOpen] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [expandedRows, setExpandedRows] = useState<DataTableExpandedRows | undefined>(undefined)
-  const [dgOpen, setDgOpen] = useState<{ row: Row; anchor: DOMRect } | null>(null)
+  const [sorting, setSorting] = useState<SortingState>([])
+  const [expanded, setExpanded] = useState<ExpandedState>({})
   const [notifyOpen, setNotifyOpen] = useState(false)
   const [notifyKey, setNotifyKey] = useState(0)
 
@@ -345,33 +225,26 @@ function Console() {
 
   const countOf = (s: Status) => allRows.filter(r => r.status === s).length
   const activeVisible = !hidden.Active
-  const visibleCount = STATUS_ORDER.filter(s => !hidden[s]).length
-  const allSelected = visibleCount === STATUS_ORDER.length
 
   const setStatusHidden = (next: Partial<Record<Status, boolean>>) => {
     setHidden(next)
     setOnlyFlagged(false)
   }
-  const toggleStatus = (s: Status) => {
-    const next = { ...hidden }
-    if (next[s]) delete next[s]
-    else next[s] = true
+  const setVisibleStatuses = (ids: string[]) => {
+    const next: Partial<Record<Status, boolean>> = hidden.Active ? { Active: true } : {}
+    STATUS_ORDER.forEach(s => { if (!ids.includes(s)) next[s] = true })
     setStatusHidden(next)
   }
-  const toggleAll = () => {
-    if (allSelected) {
-      const next = { ...hidden }
-      STATUS_ORDER.forEach(s => { next[s] = true })
-      setStatusHidden(next)
-    } else {
-      setStatusHidden(hidden.Active ? { Active: true } : {})
-    }
+  const toggleActive = () => {
+    const next = { ...hidden }
+    if (activeVisible) next.Active = true
+    else delete next.Active
+    setStatusHidden(next)
   }
   const filterInactive = () => {
     const next: Partial<Record<Status, boolean>> = {}
     ;[...STATUS_ORDER, "Active" as Status].forEach(s => { if (s !== "Inactive") next[s] = true })
     setStatusHidden(next)
-    setStatusMenuOpen(false)
   }
   const toggleActions = () => {
     const next = !onlyFlagged
@@ -396,293 +269,244 @@ function Console() {
   const recordNotifications = (records: { account: string; emails: string[] }[]) =>
     saveNotifications(records.map(r => ({ ...r, sentAt: fmt(new Date()), by: CURRENT_USER })))
 
-  const closeDg = React.useCallback(() => setDgOpen(null), [])
-
-  const bigBtn: React.CSSProperties = { ...btnPrimary, justifyContent: "center", padding: "0.55rem 1.25rem", fontSize: 13, whiteSpace: "nowrap" }
-
-  const expansionTemplate = (row: Row) => <AccountExpansion row={row} />
-
-  const toggleChildren = (id: string) => {
-    const open = !!(expandedRows as Record<string, boolean> | undefined)?.[id]
-    setExpandedRows(prev => {
-      const next = { ...(prev || {}) } as Record<string, boolean>
-      if (open) delete next[id]
-      else next[id] = true
+  const isExpanded = (rowKey: string) => expanded === true || !!(expanded as Record<string, boolean>)[rowKey]
+  const toggleChildren = (rowKey: string, accountId: string) => {
+    const open = isExpanded(rowKey)
+    setExpanded(prev => {
+      const next = { ...(prev === true ? {} : prev) }
+      if (open) delete next[rowKey]
+      else next[rowKey] = true
       return next
     })
-    if (!open) setTimeout(() => document.getElementById(`children-${id}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 60)
+    if (!open) setTimeout(() => document.getElementById(`children-${accountId}`)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" }), 60)
   }
 
+  const columns: ColumnDef<Row>[] = [
+    {
+      id: "select", size: 40, enableSorting: false,
+      header: () => <AmpCheckbox name="select-all" checked={allVisibleSelected} onChange={toggleSelectAll} />,
+      cell: ({ row }) => <AmpCheckbox name={`select-${row.original.id}`} checked={selected.has(row.original.id)} onChange={() => toggleSelect(row.original.id)} />,
+    },
+    {
+      id: "issue", size: 32, header: "", enableSorting: false,
+      cell: ({ row }) => row.original.issueReason && (
+        <AmpStatusIcon status="error" size="sm"
+          tooltipLabel={`${row.original.issueReason} — resolved automatically by backend processing, not manually.`} />
+      ),
+    },
+    {
+      accessorKey: "name", header: "Account Name",
+      cell: ({ row }) => <AmpTypography variant="body-sm" weight="semibold" as="span">{row.original.name}</AmpTypography>,
+    },
+    {
+      accessorKey: "email", header: "Email",
+      cell: ({ row }) => (
+        <AmpTooltip content={row.original.email}>
+          <AmpBox maxW={200} truncate>
+            <AmpTypography variant="body-sm" color="muted" as="span">{row.original.email}</AmpTypography>
+          </AmpBox>
+        </AmpTooltip>
+      ),
+    },
+    {
+      id: "steps", header: "Steps", enableSorting: false,
+      cell: ({ row }) => (
+        <AmpStack direction="row" align="center" gap="xs">
+          {row.original.steps.map((s, i) => (
+            <AmpStatusIcon key={i} status={s.done ? "done" : "pending"} size="sm" tooltipLabel={s.title} />
+          ))}
+        </AmpStack>
+      ),
+    },
+    { accessorKey: "status", header: "Status", cell: ({ row }) => <StatusChip status={row.original.status} /> },
+    {
+      id: "distGroup", header: "Distribution Group", enableSorting: false,
+      cell: ({ row }) => <DistributionGroup row={row.original} />,
+    },
+    { accessorKey: "contract", header: "Contract nearest start date" },
+    { accessorKey: "created", header: "Account created on" },
+    {
+      accessorKey: "by", header: "Account created by", enableSorting: false,
+      cell: ({ row }) => creatorKind(row.original.by) === "external" ? (
+        <AmpTooltip content={row.original.parentName ? `${row.original.by}\nAdmin of ${row.original.parentName}` : row.original.by}>
+          <AmpTypography variant="body-sm" as="span" style={{ cursor: "help", textDecoration: "underline dotted" }}>External user</AmpTypography>
+        </AmpTooltip>
+      ) : <AmpTypography variant="body-sm" as="span">{row.original.by}</AmpTypography>,
+    },
+    {
+      id: "actions", header: "Actions", size: 110, enableSorting: false,
+      cell: ({ row }) => (
+        <AmpStack direction="row" align="center" gap="xs">
+          <AmpButton variant="ghost" size="icon" tooltip="Edit" aria-label="Edit">
+            <AmpIcon icon={Pencil} size="sm" />
+          </AmpButton>
+          {row.original.status === "Active" && (
+            <AmpButton
+              variant="ghost" size="sm"
+              tooltip={`Child accounts (${row.original.childCount})`}
+              aria-label={`Child accounts (${row.original.childCount})`}
+              leftIcon={<AmpIcon icon={Network} size="sm" />}
+              onClick={() => toggleChildren(row.id, row.original.id)}
+            >
+              {row.original.childCount > 0 ? row.original.childCount : null}
+            </AmpButton>
+          )}
+        </AmpStack>
+      ),
+    },
+  ]
+
+  const table = useReactTable({
+    data: rows,
+    columns,
+    state: { sorting },
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    initialState: { pagination: { pageSize: 25 } },
+  })
+  const pageData = table.getRowModel().rows.map(r => r.original)
+  const { pageIndex, pageSize } = table.getState().pagination
+
+  // AmpDataTable keys expansion by position within the page, so it must reset whenever the page contents change
+  useEffect(() => setExpanded({}), [pageIndex, pageSize, sorting, rows])
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+    <AmpStack gap="lg">
       {/* Summary + actions */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 20 }}>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 14, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <button style={bigBtn}>
-              <i className="pi pi-user-plus" style={{ fontSize: 12 }} />
-              Create account
-            </button>
-            <button onClick={() => { setNotifyKey(k => k + 1); setNotifyOpen(true) }} style={{ ...bigBtn, background: "#2d7a2d" }}>
-              <i className="pi pi-send" style={{ fontSize: 12 }} />
-              Notify
-            </button>
-            <button onClick={() => im.setOpen(true)} style={{ ...bigBtn, background: "#2563eb" }}>
-              <i className="pi pi-sync" style={{ fontSize: 12 }} />
-              Intelometry check
-            </button>
-            {im.scheduledRun && (
-              <div onClick={() => im.setOpen(true)} style={{
-                display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 6, cursor: "pointer",
-                background: tint("#2563eb", 0.1), border: `1px solid ${tint("#2563eb", 0.3)}`, color: "#2563eb", fontSize: 11, fontWeight: 600,
-              }}>
-                <i className="pi pi-spin pi-spinner" style={{ fontSize: 11 }} />
-                Scheduled query running ({im.scheduledRun})…
-              </div>
-            )}
-            {im.bgJob?.status === "running" && (
-              <div onClick={() => im.setOpen(true)} style={{
-                display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 6, cursor: "pointer",
-                background: tint("#2563eb", 0.1), border: `1px solid ${tint("#2563eb", 0.3)}`, color: "#2563eb", fontSize: 11, fontWeight: 600,
-              }}>
-                <i className="pi pi-spin pi-spinner" style={{ fontSize: 11 }} />
-                Intelometry check running…
-              </div>
-            )}
-            {im.bgJob?.status === "done" && (
-              <div onClick={() => im.setOpen(true)} style={{
-                display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 6, cursor: "pointer",
-                background: tint("#2d7a2d", 0.1), border: `1px solid ${tint("#2d7a2d", 0.3)}`, color: "#2d7a2d", fontSize: 11, fontWeight: 700,
-              }}>
-                <i className="pi pi-check" style={{ fontSize: 11 }} />
-                {im.bgJob.foundCount} change(s) found — Review
-              </div>
-            )}
-          </div>
+      <AmpStack direction="row" justify="between" align="start" wrap="wrap" gap="lg">
+        <AmpStack direction="row" align="start" gap="md" wrap="wrap">
+          <AmpStack gap="sm">
+            <AmpButton variant="primary" leftIcon={<AmpIcon icon={Plus} />}>Create account</AmpButton>
+            <AmpButton variant="outline" onClick={() => { setNotifyKey(k => k + 1); setNotifyOpen(true) }}>Notify</AmpButton>
+            <AmpButton variant="outline" onClick={() => im.setOpen(true)}>Intelometry check</AmpButton>
+          </AmpStack>
 
-          <div style={{ display: "flex", alignItems: "stretch", gap: 10, flexWrap: "wrap" }}>
-            <Kpi value={allRows.length} label="Total created accounts" color="var(--text-color)"
-              tip="All accounts in existence, independent of status." />
-            <Kpi value={countOf("Active")} label="Active accounts" color="#2d7a2d" />
-            <Kpi value={countOf("Inactive")} label="Inactive accounts" color="#c14a3e"
-              tip="Filter the table to Inactive accounts only." onClick={filterInactive} />
-            <div style={{ position: "relative" }}>
-              <Kpi value={ACCOUNT_ISSUES.length} label="Actions" color="#cc1111"
-                onClick={toggleActions} active={onlyFlagged} activeColor="#cc1111" />
-              {actionsOpen && (
-                <>
-                  <div onClick={() => setActionsOpen(false)} style={backdrop} />
-                  <div style={{
-                    ...popoverStyle, position: "absolute", top: "calc(100% + 8px)", left: 0, zIndex: 50,
-                    padding: "12px 14px", minWidth: 320, maxHeight: 260, overflowY: "auto",
-                  }}>
-                    <div style={popoverHeading}>Accounts blocked from creation</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                      {ACCOUNT_ISSUES.map(issue => (
-                        <div key={issue.name} style={{ display: "flex", alignItems: "flex-start", gap: 8, lineHeight: 1.4 }}>
-                          <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#c14a3e", marginTop: 5, flexShrink: 0 }} />
-                          <div>
-                            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-color)" }}>{issue.name}</div>
-                            <div style={{ fontSize: 11, color: "var(--text-color-secondary)" }}>{issue.reason}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </>
+          <AmpStack direction="row" align="stretch" gap="sm" wrap="wrap">
+            <AmpTooltip content="All accounts in existence, independent of status.">
+              <AmpBox minW={150}><AmpKpiCard title="Total created accounts" value={allRows.length} borderColor="gray" /></AmpBox>
+            </AmpTooltip>
+            <AmpBox minW={150}><AmpKpiCard title="Active accounts" value={countOf("Active")} valueColor="success" borderColor="gray" /></AmpBox>
+            <AmpTooltip content="Filter the table to Inactive accounts only.">
+              <button type="button" onClick={filterInactive} className="ps:cursor-pointer ps:text-left" style={bareButton}>
+                <AmpBox minW={150}><AmpKpiCard title="Inactive accounts" value={countOf("Inactive")} valueColor="destructive" borderColor="gray" /></AmpBox>
+              </button>
+            </AmpTooltip>
+            <Popover open={actionsOpen} onOpenChange={(open: boolean) => { if (!open) setActionsOpen(false) }}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  onClick={(e: React.MouseEvent) => { e.preventDefault(); toggleActions() }}
+                  aria-pressed={onlyFlagged}
+                  className="ps:cursor-pointer ps:text-left"
+                  style={bareButton}
+                >
+                  <AmpBox minW={150}>
+                    <AmpKpiCard title="Actions" value={ACCOUNT_ISSUES.length} valueColor="primary" borderColor={onlyFlagged ? "primary" : "gray"} />
+                  </AmpBox>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent>
+                <AmpStack gap="sm" p="md" maxW={360} maxH={260} style={{ overflowY: "auto" }}>
+                  <AmpTypography variant="footnote" color="muted" weight="semibold">ACCOUNTS BLOCKED FROM CREATION</AmpTypography>
+                  {ACCOUNT_ISSUES.map(issue => (
+                    <AmpStack key={issue.name} direction="row" align="start" gap="sm">
+                      <AmpStatusIcon status="error" size="sm" hideTooltip />
+                      <AmpStack gap="none">
+                        <AmpTypography variant="body-sm" weight="semibold">{issue.name}</AmpTypography>
+                        <AmpTypography variant="caption" color="muted">{issue.reason}</AmpTypography>
+                      </AmpStack>
+                    </AmpStack>
+                  ))}
+                </AmpStack>
+              </PopoverContent>
+            </Popover>
+          </AmpStack>
+
+          {(im.scheduledRun || im.bgJob) && (
+            <AmpStack gap="sm" maxW={340}>
+              {im.scheduledRun && (
+                <AmpAlert color="info" action={<AmpButton variant="link" size="sm" onClick={() => im.setOpen(true)}>View</AmpButton>}>
+                  Scheduled query running ({im.scheduledRun})…
+                </AmpAlert>
               )}
-            </div>
-          </div>
-        </div>
+              {im.bgJob?.status === "running" && (
+                <AmpAlert color="info" action={<AmpButton variant="link" size="sm" onClick={() => im.setOpen(true)}>View</AmpButton>}>
+                  Intelometry check running…
+                </AmpAlert>
+              )}
+              {im.bgJob?.status === "done" && (
+                <AmpAlert color="success" action={<AmpButton variant="link" size="sm" onClick={() => im.setOpen(true)}>Review</AmpButton>}>
+                  {im.bgJob.foundCount} change(s) found
+                </AmpAlert>
+              )}
+            </AmpStack>
+          )}
+        </AmpStack>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 8 }}>
-          <span style={{ fontSize: 12, color: "var(--text-color)" }}>Emails sent on: 08-31-2026 0/1000</span>
-          <i className="pi pi-refresh" style={{ fontSize: 14, color: "var(--text-color-secondary)", cursor: "pointer" }} />
-          <i className="pi pi-calendar" style={{ fontSize: 14, color: "var(--text-color-secondary)", cursor: "pointer" }} />
-          <select defaultValue="" style={{ ...nativeSelect, width: 170 }}>
-            <option value="" disabled>SELECT ACTION</option>
-          </select>
-        </div>
-      </div>
+        <AmpStack direction="row" align="center" gap="sm">
+          <AmpTypography variant="body-sm">Emails sent on: 08-31-2026 0/1000</AmpTypography>
+          <AmpRefetchIcon tooltip="Refresh" />
+          <AmpButton variant="ghost" size="icon" tooltip="Calendar" aria-label="Calendar">
+            <AmpIcon icon={Calendar} size="sm" />
+          </AmpButton>
+          <AmpActionsButton multiple={false} label="Select action" options={[]} variant="outline" />
+        </AmpStack>
+      </AmpStack>
 
-      <div style={{ height: 1, background: "var(--surface-border)" }} />
+      <Divider />
 
       {/* Filters */}
-      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-        <button
-          onClick={() => {
-            const next = { ...hidden }
-            if (activeVisible) next.Active = true
-            else delete next.Active
-            setStatusHidden(next)
-          }}
-          style={{
-            ...btnSecondary, height: CTRL_H, fontWeight: activeVisible ? 600 : 500,
-            background: activeVisible ? tint(STATUS_COLOR.Active, 0.12) : "none",
-            color: activeVisible ? STATUS_COLOR.Active : "var(--text-color-secondary)",
-            border: activeVisible ? `1px solid ${tint(STATUS_COLOR.Active, 0.4)}` : BORDER,
-          }}
-        >
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: activeVisible ? STATUS_COLOR.Active : "var(--surface-border)" }} />
-          Active · {countOf("Active")}
-        </button>
-
-        <FilterMenu
-          icon="pi pi-filter"
-          label="Status"
-          open={statusMenuOpen}
-          onOpenChange={setStatusMenuOpen}
-          allChecked={allSelected}
-          onToggleAll={toggleAll}
-          allCount={allRows.length}
-          items={STATUS_ORDER.map(s => ({
-            key: s, label: s, color: STATUS_COLOR[s], checked: !hidden[s], count: countOf(s), onToggle: () => toggleStatus(s),
-          }))}
-        />
-
-        <FilterMenu
-          icon="pi pi-user"
-          label="Account created by"
-          open={creatorMenuOpen}
-          onOpenChange={setCreatorMenuOpen}
-          allChecked={CREATOR_KINDS.every(k => !hiddenCreators[k])}
-          onToggleAll={() => setHiddenCreators(
-            CREATOR_KINDS.every(k => !hiddenCreators[k]) ? Object.fromEntries(CREATOR_KINDS.map(k => [k, true])) : {},
-          )}
-          allCount={allRows.length}
-          items={CREATOR_KINDS.map(k => ({
-            key: k, label: CREATOR_KIND_LABEL[k], color: CREATOR_COLOR[k], checked: !hiddenCreators[k],
-            count: allRows.filter(r => creatorKind(r.by) === k).length,
-            onToggle: () => setHiddenCreators(prev => ({ ...prev, [k]: !prev[k] })),
-          }))}
-        />
-
-        <div style={{ position: "relative" }}>
-          <input
-            value={filter}
-            onChange={e => setFilter(e.target.value)}
-            placeholder="Filter ..."
-            style={{ ...nativeInput, width: 240, paddingLeft: 28 }}
+      <AmpStack direction="row" align="end" gap="md" wrap="wrap">
+        <AmpStack h={40} justify="center">
+          <AmpChip color={activeVisible ? "success" : "gray"} onClick={toggleActive}>
+            Active · {countOf("Active")}
+          </AmpChip>
+        </AmpStack>
+        <AmpBox minW={240}>
+          <AmpMultiSelect
+            name="status" label="Status"
+            value={STATUS_ORDER.filter(s => !hidden[s])}
+            dropdownItems={STATUS_ORDER.map(s => ({ id: s, alias: `${s} (${countOf(s)})` }))}
+            selectAllLabel="All" allSelectedLabel="All statuses"
+            onChange={asMultiChange(setVisibleStatuses)}
           />
-          <i className="pi pi-search" style={{
-            position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)",
-            fontSize: 12, color: "var(--text-color-secondary)", pointerEvents: "none",
-          }} />
-        </div>
-      </div>
+        </AmpBox>
+        <AmpBox minW={240}>
+          <AmpMultiSelect
+            name="createdBy" label="Account created by"
+            value={CREATOR_KINDS.filter(k => !hiddenCreators[k])}
+            dropdownItems={CREATOR_KINDS.map(k => ({
+              id: k, alias: `${CREATOR_KIND_LABEL[k]} (${allRows.filter(r => creatorKind(r.by) === k).length})`,
+            }))}
+            selectAllLabel="All" allSelectedLabel="All creators"
+            onChange={asMultiChange(ids => setHiddenCreators(Object.fromEntries(CREATOR_KINDS.filter(k => !ids.includes(k)).map(k => [k, true]))))}
+          />
+        </AmpBox>
+        <AmpBox grow minW={16} />
+        <AmpBox w={320}>
+          <AmpSearchInput name="search" value={filter} onSearch={setFilter} placeholder="Filter…" />
+        </AmpBox>
+      </AmpStack>
 
       {/* Table */}
-      <div style={{ border: BORDER, borderRadius: 12, overflow: "hidden" }}>
-        <DataTable
-          value={rows}
-          dataKey="id"
-          expandedRows={expandedRows}
-          onRowToggle={e => setExpandedRows(e.data as DataTableExpandedRows)}
-          rowExpansionTemplate={expansionTemplate}
-          size="small"
-          paginator
-          rows={25}
-          rowsPerPageOptions={[10, 25, 50, 100]}
+      <AmpCard>
+        <AmpDataTable
+          columns={columns}
+          data={pageData}
           emptyMessage="No accounts match the current filters."
-          style={{ background: "var(--surface-card)" }}
-          pt={{
-            ...tablePt,
-            paginator: { root: { style: { borderTop: BORDER, fontSize: 12, padding: "4px 12px", background: "var(--surface-card)" } } },
-          }}
-        >
-          <Column
-            header={<input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAll} style={checkboxStyle} />}
-            body={(r: Row) => <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} style={checkboxStyle} />}
-            style={{ width: "2.5rem" }}
-          />
-          <Column expander style={{ width: "3rem" }} />
-          <Column style={{ width: "2rem" }} body={(r: Row) => r.issueReason && (
-            <HoverTip fixed tip={`${r.issueReason} — resolved automatically by backend processing, not manually.`}>
-              <i className="pi pi-exclamation-circle" style={{ fontSize: 15, color: "#c14a3e" }} />
-            </HoverTip>
-          )} />
-          <Column field="name" header="Account Name" sortable
-            body={(r: Row) => <span style={{ fontWeight: 600, color: "var(--text-color)" }}>{r.name}</span>} />
-          <Column field="email" header="Email" sortable
-            body={(r: Row) => (
-              <span title={r.email} style={{
-                display: "block", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                color: "var(--text-color-secondary)",
-              }}>{r.email}</span>
-            )} />
-          <Column header="Steps" body={(r: Row) => {
-            const doneColor = r.status === "Pending email" ? STATUS_COLOR["Pending email"] : STATUS_COLOR.Active
-            return (
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                {r.steps.map((s, i) => (
-                  <HoverTip key={i} fixed tip={s.title}><StepDot done={s.done} color={doneColor} /></HoverTip>
-                ))}
-              </div>
-            )
-          }} />
-          <Column field="status" header="Status" sortable body={(r: Row) => <StatusPill status={r.status} />} />
-          <Column header="Distribution Group" body={(r: Row) => (
-            <div
-              onClick={e => setDgOpen({ row: r, anchor: e.currentTarget.getBoundingClientRect() })}
-              style={{ cursor: "pointer", display: "inline-block", lineHeight: 1.35 }}
-            >
-              <div style={{
-                fontWeight: 600, color: "var(--text-color)",
-                textDecoration: "underline dotted var(--text-color-secondary)", textUnderlineOffset: 2,
-              }}>{r.distGroupId}</div>
-              <div style={{ fontSize: 11, color: "var(--text-color-secondary)" }}>{r.recipientEmails.length} recipients</div>
-            </div>
-          )} />
-          <Column field="contract" header="Contract nearest start date" sortable />
-          <Column field="created" header="Account created on" sortable />
-          <Column field="by" header="Account created by" body={(r: Row) => creatorKind(r.by) === "external" ? (
-            <HoverTip fixed tip={
-              <>
-                <div>{r.by}</div>
-                {r.parentName && <div style={{ opacity: 0.7, marginTop: 2 }}>Admin of {r.parentName}</div>}
-              </>
-            }>
-              <span style={{
-                lineHeight: 1.4, cursor: "help", color: "var(--text-color)",
-                textDecoration: "underline dotted var(--text-color-secondary)", textUnderlineOffset: 2,
-              }}>
-                External user
-              </span>
-            </HoverTip>
-          ) : r.by} />
-          <Column header="Actions" style={{ width: 96, textAlign: "center" }} body={(r: Row) => (
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
-              <button title="Edit" style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "inline-flex" }}>
-                <i className="pi pi-pencil" style={{ fontSize: 13, color: "var(--text-color-secondary)" }} />
-              </button>
-              {r.status === "Active" && (
-                <button
-                  onClick={() => toggleChildren(r.id)}
-                  title={`Child accounts (${r.childCount})`}
-                  style={{
-                    background: "none", border: "none", cursor: "pointer", padding: 4,
-                    display: "inline-flex", alignItems: "center", gap: 3,
-                  }}
-                >
-                  <i className="pi pi-sitemap" style={{ fontSize: 13, color: r.childCount > 0 ? "#cc1111" : "var(--text-color-secondary)" }} />
-                  {r.childCount > 0 && (
-                    <span style={{ fontSize: 10, fontWeight: 700, color: "#cc1111" }}>{r.childCount}</span>
-                  )}
-                </button>
-              )}
-            </div>
-          )} />
-        </DataTable>
-      </div>
-
-      {dgOpen && (
-        <FixedPopover anchor={dgOpen.anchor} onClose={closeDg}>
-          <div style={popoverHeading}>Group {dgOpen.row.distGroupId} · {dgOpen.row.recipientEmails.length} recipients</div>
-          {dgOpen.row.recipientEmails.map((email, i) => (
-            <div key={i} style={{ fontSize: 12, color: "var(--text-color)", padding: "3px 0", whiteSpace: "nowrap" }}>{email}</div>
-          ))}
-        </FixedPopover>
-      )}
+          enableSorting
+          sorting={sorting}
+          onSortingChange={setSorting}
+          expanded={expanded}
+          onExpandedChange={setExpanded}
+          getRowCanExpand={() => true}
+          renderSubComponent={row => <AccountExpansion row={row.original} />}
+          expandedRowPadded
+        />
+        <AmpDataTablePagination table={table} pageSizeOptions={[10, 25, 50, 100]} />
+      </AmpCard>
 
       <IntelometryDialog im={im} />
       <NotifyDialog
@@ -692,148 +516,93 @@ function Console() {
         accountNames={allRows.map(r => r.name)}
         onSent={recordNotifications}
       />
-    </div>
+    </AmpStack>
   )
 }
 
-const CREATOR_KINDS = Object.keys(CREATOR_KIND_LABEL) as CreatorKind[]
-const CREATOR_COLOR: Record<CreatorKind, string> = { system: "#6b7280", ammper: "#cc1111", external: "#2563eb" }
-
-type FilterMenuItem = { key: string; label: string; color: string; checked: boolean; count: number; onToggle: () => void }
-
-function FilterMenu({ icon, label, open, onOpenChange, allChecked, onToggleAll, allCount, items }: {
-  icon: string
-  label: string
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  allChecked: boolean
-  onToggleAll: () => void
-  allCount: number
-  items: FilterMenuItem[]
-}) {
-  const selected = items.filter(i => i.checked).length
+function DistributionGroup({ row }: { row: Row }) {
   return (
-    <div style={{ position: "relative" }}>
-      <button onClick={() => onOpenChange(!open)} style={{ ...btnSecondary, height: CTRL_H, fontWeight: 600 }}>
-        <i className={icon} style={{ fontSize: 11, color: "var(--text-color-secondary)" }} />
-        {label} <span style={{ color: "var(--text-color-secondary)", fontWeight: 500 }}>({selected}/{items.length})</span>
-        <i className={open ? "pi pi-chevron-up" : "pi pi-chevron-down"} style={{ fontSize: 10, color: "var(--text-color-secondary)" }} />
-      </button>
-      {open && (
-        <>
-          <div onClick={() => onOpenChange(false)} style={backdrop} />
-          <div style={{
-            ...popoverStyle, position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 50,
-            padding: 6, minWidth: 240, display: "flex", flexDirection: "column", gap: 1,
-          }}>
-            <MenuCheckItem checked={allChecked} onToggle={onToggleAll} dot="var(--text-color)" label="All" count={allCount} bold />
-            <div style={{ height: 1, background: "var(--surface-border)", margin: "4px 2px" }} />
-            {items.map(i => (
-              <MenuCheckItem key={i.key} checked={i.checked} onToggle={i.onToggle}
-                dot={i.checked ? i.color : "var(--surface-border)"} label={i.label} count={i.count} />
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  )
-}
-
-function MenuCheckItem({ checked, onToggle, dot, label, count, bold }: {
-  checked: boolean; onToggle: () => void; dot: string; label: string; count: number; bold?: boolean
-}) {
-  const [hover, setHover] = useState(false)
-  return (
-    <label
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        display: "flex", alignItems: "center", gap: 10, padding: "7px 10px", borderRadius: 6, cursor: "pointer",
-        background: hover ? "var(--surface-hover)" : "transparent",
-      }}
-    >
-      <input type="checkbox" checked={checked} onChange={onToggle} style={checkboxStyle} />
-      <span style={{ width: 7, height: 7, borderRadius: "50%", background: dot }} />
-      <span style={{ flex: 1, fontSize: 12, fontWeight: bold ? 600 : 400, color: "var(--text-color)" }}>{label}</span>
-      <span style={{ fontSize: 11, color: "var(--text-color-secondary)" }}>{count}</span>
-    </label>
+    <Popover>
+      <PopoverTrigger asChild>
+        <button type="button" className="ps:cursor-pointer ps:text-left" style={bareButton}>
+          <AmpStack gap="none">
+            <AmpTypography variant="body-sm" weight="semibold" style={{ textDecoration: "underline dotted", textUnderlineOffset: 2 }}>
+              {row.distGroupId}
+            </AmpTypography>
+            <AmpTypography variant="footnote" color="muted">{row.recipientEmails.length} recipients</AmpTypography>
+          </AmpStack>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent>
+        <AmpStack gap="xs" p="md" minW={230} maxH={220} style={{ overflowY: "auto" }}>
+          <AmpTypography variant="footnote" color="muted" weight="semibold">
+            GROUP {row.distGroupId} · {row.recipientEmails.length} RECIPIENTS
+          </AmpTypography>
+          {row.recipientEmails.map((email, i) => (
+            <AmpTypography key={i} variant="body-sm">{email}</AmpTypography>
+          ))}
+        </AmpStack>
+      </PopoverContent>
+    </Popover>
   )
 }
 
 // ── Row expansion: contracts → facilities, notifications ──────────────────────
+const facilityColumns = (contractNumber: string): ColumnDef<AmcFacility>[] => [
+  { accessorKey: "facilityNumber", header: "Facility Number", cell: ({ getValue }) => <span style={MONO}>{String(getValue())}</span> },
+  { accessorKey: "address", header: "Service Address" },
+  { accessorKey: "meterStart", header: "Meter Start Date" },
+  { accessorKey: "meterEnd", header: "Meter End Date" },
+  { id: "contractNumber", header: "Contract Number", cell: () => contractNumber },
+]
+
+const contractColumns: ColumnDef<AmcContract>[] = [
+  { accessorKey: "number", header: "Contract Number" },
+  { accessorKey: "executed", header: "Executed" },
+  { accessorKey: "start", header: "Start" },
+  { accessorKey: "end", header: "End" },
+]
+
 function AccountExpansion({ row }: { row: Row }) {
-  const [expandedContracts, setExpandedContracts] = useState<DataTableExpandedRows | undefined>(undefined)
-  const card: React.CSSProperties = { background: "var(--surface-card)", border: BORDER, borderRadius: 8, padding: "14px 16px" }
-  const cardTitle: React.CSSProperties = { fontSize: 13, fontWeight: 700, color: "var(--text-color)", marginBottom: 12 }
-
-  const facilitiesTemplate = (c: AmcContract) => (
-    <div style={{ padding: "12px 16px 16px", background: "var(--surface-section)" }}>
-      <div style={{ ...cardTitle, fontSize: 12 }}>Facilities of “{row.name}”</div>
-      <DataTable value={c.facilities} dataKey="facilityNumber" size="small" style={{ background: "var(--surface-card)" }} pt={tablePt}>
-        <Column field="facilityNumber" header="Facility Number" style={{ fontFamily: "monospace" }} />
-        <Column field="address" header="Service Address" />
-        <Column field="meterStart" header="Meter Start Date" />
-        <Column field="meterEnd" header="Meter End Date" />
-        <Column header="Contract Number" body={() => c.number} />
-      </DataTable>
-    </div>
-  )
-
   return (
-    <div style={{ padding: "12px 16px 16px", background: "rgba(204,17,17,0.04)", display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={card}>
-        <div style={cardTitle}>Contracts</div>
-        <DataTable
-          value={[row.contractDetail]}
-          dataKey="number"
-          expandedRows={expandedContracts}
-          onRowToggle={e => setExpandedContracts(e.data as DataTableExpandedRows)}
-          rowExpansionTemplate={facilitiesTemplate}
-          size="small"
-          style={{ background: "var(--surface-card)" }}
-          pt={tablePt}
-        >
-          <Column expander style={{ width: "3rem" }} />
-          <Column field="number" header="Contract Number" />
-          <Column field="executed" header="Executed" />
-          <Column field="start" header="Start" />
-          <Column field="end" header="End" />
-        </DataTable>
-      </div>
+    <AmpStack gap="md">
+      <AmpCard title="Contracts">
+        <AmpDataTable
+          columns={contractColumns}
+          data={[row.contractDetail]}
+          getRowCanExpand={() => true}
+          expandedRowPadded
+          renderSubComponent={c => (
+            <AmpStack gap="sm">
+              <AmpTypography variant="body-sm" weight="semibold">Facilities of “{row.name}”</AmpTypography>
+              <AmpDataTable columns={facilityColumns(c.original.number)} data={c.original.facilities} />
+            </AmpStack>
+          )}
+        />
+      </AmpCard>
 
       {row.status === "Active" && <ChildAccountsCard row={row} />}
 
       {row.notifications.length > 0 && (
-        <div style={card}>
-          <div style={cardTitle}>Notifications</div>
-          {row.notifications.map((n, i) => (
-            <div key={i} style={{ borderTop: BORDER, padding: "10px 0", display: "flex", flexDirection: "column", gap: 3 }}>
-              <div style={{ fontSize: 11, color: "var(--text-color-secondary)" }}>Welcome packet sent on {n.sentAt} by {n.by}</div>
-              <div style={{ fontSize: 12, color: "var(--text-color)" }}>{n.emails.join(", ")}</div>
-            </div>
-          ))}
-        </div>
+        <AmpCard title="Notifications">
+          <AmpStack gap="none">
+            {row.notifications.map((n, i) => (
+              <AmpStack key={i} gap="none" py="sm" style={i > 0 ? { borderTop: DIVIDER } : undefined}>
+                <AmpTypography variant="caption" color="muted">Welcome packet sent on {n.sentAt} by {n.by}</AmpTypography>
+                <AmpTypography variant="body-sm">{n.emails.join(", ")}</AmpTypography>
+              </AmpStack>
+            ))}
+          </AmpStack>
+        </AmpCard>
       )}
-    </div>
+    </AmpStack>
   )
 }
 
 // ── Child accounts ─────────────────────────────────────────────────────────────
-const ROLE_COLOR: Record<ChildRole, string> = { admin: "#7c5cd6", user: "#2563eb" }
-const CHILD_GRID = "minmax(0, 1fr) 150px 70px 160px"
-
-function RolePill({ role }: { role: ChildRole }) {
-  const color = ROLE_COLOR[role]
-  return (
-    <span style={{
-      display: "inline-flex", alignItems: "center", gap: 4, padding: "1px 8px", borderRadius: 20,
-      fontSize: 10, fontWeight: 700, background: tint(color, 0.14), color, textTransform: "capitalize",
-    }}>
-      <i className={role === "admin" ? "pi pi-shield" : "pi pi-user"} style={{ fontSize: 8 }} />
-      {role}
-    </span>
-  )
-}
+const ROLE_CHIP: Record<ChildRole, ChipColor> = { admin: "rose", user: "blue" }
+const CHILD_GRID = "minmax(0, 1fr) 150px 70px 170px"
+const childGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: CHILD_GRID, gap: 10, alignItems: "center" }
 
 function ChildAccountsCard({ row }: { row: Row }) {
   const { accounts } = useAccountManager()
@@ -841,52 +610,39 @@ function ChildAccountsCard({ row }: { row: Row }) {
   const admins = children.filter(c => c.role === "admin").length
 
   return (
-    <div id={`children-${row.id}`} style={{ background: "var(--surface-card)", border: BORDER, borderRadius: 8, padding: "14px 16px" }}>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-          <i className="pi pi-sitemap" style={{ fontSize: 13, color: "#cc1111", marginTop: 2 }} />
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-color)" }}>Child accounts</div>
-            <div style={{ fontSize: 11, color: "var(--text-color-secondary)", marginTop: 2, lineHeight: 1.45 }}>
-              Created from this account&rsquo;s dashboard. Admins get their own row in the table and can create accounts; users can&rsquo;t.
-            </div>
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-          <span style={{ fontSize: 11, color: ROLE_COLOR.admin, fontWeight: 600 }}>{admins} admin</span>
-          <span style={{ fontSize: 11, color: "var(--text-color-secondary)" }}>·</span>
-          <span style={{ fontSize: 11, color: ROLE_COLOR.user, fontWeight: 600 }}>{children.length - admins} user</span>
-        </div>
-      </div>
+    <div id={`children-${row.id}`}>
+      <AmpCard
+        title="Child accounts"
+        headerActions={
+          <AmpTypography variant="caption" color="muted">
+            {admins} admin · {children.length - admins} user
+          </AmpTypography>
+        }
+      >
+        <AmpStack gap="sm">
+          <AmpTypography variant="caption" color="muted">
+            Created from this account&rsquo;s dashboard. Admins get their own row in the table and can create accounts; users can&rsquo;t.
+          </AmpTypography>
 
-      <div style={{
-        display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 6,
-        background: "var(--surface-section)", border: BORDER,
-      }}>
-        <i className="pi pi-building" style={{ fontSize: 12, color: "var(--text-color-secondary)" }} />
-        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-color)" }}>{row.name}</span>
-        <span style={{ fontSize: 11, color: "var(--text-color-secondary)" }}>{row.email}</span>
-      </div>
+          <AmpStack direction="row" align="center" gap="sm" p="sm" bg="muted" border rounded="md">
+            <AmpTypography variant="body-sm" weight="semibold">{row.name}</AmpTypography>
+            <AmpTypography variant="caption" color="muted">{row.email}</AmpTypography>
+          </AmpStack>
 
-      {children.length === 0 ? (
-        <div style={{
-          marginTop: 10, marginLeft: 14, border: "1px dashed var(--surface-border)", borderRadius: 8, padding: "14px",
-          fontSize: 12, color: "var(--text-color-secondary)", display: "flex", alignItems: "center", gap: 8,
-        }}>
-          <i className="pi pi-inbox" style={{ fontSize: 14 }} />
-          No child accounts yet.
-        </div>
-      ) : (
-        <div style={{ marginLeft: 14 }}>
-          <div style={{
-            display: "grid", gridTemplateColumns: CHILD_GRID, gap: 10, padding: "10px 10px 6px 26px",
-            fontSize: 11, fontWeight: 600, color: "var(--text-color-secondary)",
-          }}>
-            <span>Email</span><span>Creation date</span><span>Role</span><span>Status</span>
-          </div>
-          <ChildTree nodes={children} accounts={accounts} pool={row.contractDetail.facilities} />
-        </div>
-      )}
+          {children.length === 0 ? (
+            <AmpBox ml={14}><EmptyNote>No child accounts yet.</EmptyNote></AmpBox>
+          ) : (
+            <AmpBox ml={14}>
+              <AmpBox px="sm" pt="sm" pb="xs" pl={26} style={childGrid}>
+                {["Email", "Creation date", "Role", "Status"].map(h => (
+                  <AmpTypography key={h} variant="caption" color="muted" weight="semibold">{h}</AmpTypography>
+                ))}
+              </AmpBox>
+              <ChildTree nodes={children} accounts={accounts} pool={row.contractDetail.facilities} />
+            </AmpBox>
+          )}
+        </AmpStack>
+      </AmpCard>
     </div>
   )
 }
@@ -894,11 +650,17 @@ function ChildAccountsCard({ row }: { row: Row }) {
 // `pool` is the creator's facilities: the parent account's at the top level, an admin's assigned ones below it.
 function ChildTree({ nodes, accounts, pool }: { nodes: ChildAccount[]; accounts: AmcAccount[]; pool: AmcFacility[] }) {
   return (
-    <div style={{ borderLeft: BORDER }}>
+    <AmpBox style={{ borderLeft: DIVIDER }}>
       {nodes.map(n => <ChildNode key={n.accountId ?? n.email} node={n} accounts={accounts} pool={pool} />)}
-    </div>
+    </AmpBox>
   )
 }
+
+const assignedFacilityColumns: ColumnDef<AmcFacility>[] = [
+  { accessorKey: "facilityNumber", header: "Facility Number", cell: ({ getValue }) => <span style={MONO}>{String(getValue())}</span> },
+  { accessorKey: "address", header: "Service Address" },
+  { accessorKey: "meterStart", header: "Meter Start Date" },
+]
 
 function ChildNode({ node, accounts, pool }: { node: ChildAccount; accounts: AmcAccount[]; pool: AmcFacility[] }) {
   const [open, setOpen] = useState(false)
@@ -911,71 +673,49 @@ function ChildNode({ node, accounts, pool }: { node: ChildAccount; accounts: Amc
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center" }}>
-        <span style={{ width: 14, height: 1, background: "var(--surface-border)", flexShrink: 0 }} />
-        <button
-          onClick={() => canExpand && setOpen(o => !o)}
-          style={{
-            width: 12, marginRight: 0, padding: 0, background: "none", border: "none", flexShrink: 0,
-            cursor: canExpand ? "pointer" : "default", display: "inline-flex", justifyContent: "center",
-          }}
-        >
-          {canExpand && <i className={open ? "pi pi-chevron-down" : "pi pi-chevron-right"} style={{ fontSize: 9, color: "var(--text-color-secondary)" }} />}
-        </button>
-        <div style={{
-          flex: 1, display: "grid", gridTemplateColumns: CHILD_GRID, gap: 10, alignItems: "center",
-          padding: "7px 10px", borderBottom: BORDER, fontSize: 12,
-        }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-              <span style={{ color: "var(--text-color)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{node.email}</span>
-              <button
-                onClick={() => setFacilitiesOpen(o => !o)}
-                title="Assigned facilities"
-                style={{
-                  ...btnSecondary, padding: "1px 8px", fontSize: 10, gap: 4, flexShrink: 0,
-                  border: facilitiesOpen ? "1px solid #cc1111" : BORDER,
-                  color: facilitiesOpen ? "#cc1111" : "var(--text-color-secondary)",
-                  background: facilitiesOpen ? "rgba(204,17,17,0.06)" : "none",
-                }}
-              >
-                <i className="pi pi-building" style={{ fontSize: 9 }} />
-                {facilities.length}
-                <i className={facilitiesOpen ? "pi pi-chevron-up" : "pi pi-chevron-down"} style={{ fontSize: 8 }} />
-              </button>
-            </div>
+      <AmpStack direction="row" align="center" gap="none">
+        <AmpBox w={14} h={1} bg="border" style={{ flexShrink: 0 }} />
+        <AmpBox w={24} style={{ flexShrink: 0 }}>
+          {canExpand && (
+            <AmpButton variant="ghost" size="icon" aria-label={open ? "Collapse" : "Expand"} onClick={() => setOpen(o => !o)}>
+              <AmpIcon icon={open ? ChevronDown : ChevronRight} size="xs" />
+            </AmpButton>
+          )}
+        </AmpBox>
+        <AmpBox grow minW={0} px="sm" py="xs" style={{ ...childGrid, borderBottom: DIVIDER }}>
+          <AmpStack gap="none" minW={0}>
+            <AmpStack direction="row" align="center" gap="sm" minW={0}>
+              <AmpBox truncate minW={0}>
+                <AmpTypography variant="body-sm" as="span">{node.email}</AmpTypography>
+              </AmpBox>
+              <AmpChip size="sm" color={facilitiesOpen ? "primary" : "gray"} tooltip="Assigned facilities" onClick={() => setFacilitiesOpen(o => !o)}>
+                {facilities.length} {facilities.length === 1 ? "facility" : "facilities"}
+              </AmpChip>
+            </AmpStack>
             {canExpand && (
-              <div style={{ fontSize: 10, color: "var(--text-color-secondary)", marginTop: 3 }}>
-                <i className="pi pi-sitemap" style={{ fontSize: 9, marginRight: 3 }} />{grandchildren.length} child account{grandchildren.length === 1 ? "" : "s"}
-              </div>
+              <AmpTypography variant="footnote" color="muted">
+                {grandchildren.length} child account{grandchildren.length === 1 ? "" : "s"}
+              </AmpTypography>
             )}
-          </div>
-          <span style={{ color: "var(--text-color-secondary)" }}>{node.created}</span>
-          <span><RolePill role={node.role} /></span>
-          <span>{status ? <StatusPill status={status} /> : <span style={{ color: "var(--text-color-secondary)" }}>—</span>}</span>
-        </div>
-      </div>
+          </AmpStack>
+          <AmpTypography variant="body-sm" color="muted">{node.created}</AmpTypography>
+          <span><AmpChip size="sm" color={ROLE_CHIP[node.role]}>{node.role === "admin" ? "Admin" : "User"}</AmpChip></span>
+          <span>{status ? <StatusChip status={status} /> : <AmpTypography variant="body-sm" color="muted">—</AmpTypography>}</span>
+        </AmpBox>
+      </AmpStack>
       {facilitiesOpen && (
-        <div style={{ margin: "8px 10px 10px 36px", border: BORDER, borderRadius: 8, overflow: "hidden", background: "var(--surface-section)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", borderBottom: BORDER }}>
-            <i className="pi pi-building" style={{ fontSize: 11, color: "#cc1111" }} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-color)" }}>Assigned facilities</span>
-            <span style={{
-              padding: "0 7px", borderRadius: 20, fontSize: 10, fontWeight: 600,
-              background: tint("#2563eb", 0.12), color: "#2563eb",
-            }}>{facilities.length}</span>
-          </div>
-          <DataTable value={facilities} dataKey="facilityNumber" size="small" style={{ background: "var(--surface-card)" }} pt={tablePt}>
-            <Column field="facilityNumber" header="Facility Number" style={{ fontFamily: "monospace" }} />
-            <Column field="address" header="Service Address" />
-            <Column field="meterStart" header="Meter Start Date" />
-          </DataTable>
-        </div>
+        <AmpBox mt="sm" mb="sm" ml={36} mr="sm" border rounded="md" bg="muted" overflow="hidden">
+          <AmpStack direction="row" align="center" gap="sm" px="md" py="sm" style={{ borderBottom: DIVIDER }}>
+            <AmpTypography variant="body-sm" weight="semibold">Assigned facilities</AmpTypography>
+            <AmpChip size="sm" color="info">{facilities.length}</AmpChip>
+          </AmpStack>
+          <AmpDataTable columns={assignedFacilityColumns} data={facilities} />
+        </AmpBox>
       )}
       {open && (
-        <div style={{ marginLeft: 26 }}>
+        <AmpBox ml={26}>
           <ChildTree nodes={grandchildren} accounts={accounts} pool={facilities} />
-        </div>
+        </AmpBox>
       )}
     </div>
   )
@@ -1119,89 +859,54 @@ function useIntelometry(allRows: Row[], onSave: (contractNumbers: string[]) => v
   }
 }
 
-const dialogPt = {
-  root: { style: { borderRadius: 12, overflow: "hidden", border: BORDER, boxShadow: "0 24px 64px rgba(0,0,0,0.35)" } },
-  header: { style: { background: "var(--surface-card)", borderBottom: BORDER, padding: "1rem 1.25rem" } },
-  content: { style: { background: "var(--surface-card)", padding: "1.25rem" } },
-  footer: { style: { background: "var(--surface-card)", borderTop: BORDER, padding: "0.75rem 1.25rem" } },
-}
-
-const sectionCard: React.CSSProperties = {
-  background: "var(--surface-section)", border: BORDER, borderRadius: 10, padding: "14px 16px",
-  display: "flex", flexDirection: "column", gap: 10,
-}
-
-function DialogHeader({ icon, color, title, subtitle }: { icon: string; color: string; title: string; subtitle: string }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <div style={{
-        width: 34, height: 34, borderRadius: 8, background: tint(color, 0.12), flexShrink: 0,
-        display: "flex", alignItems: "center", justifyContent: "center",
-      }}>
-        <i className={icon} style={{ fontSize: 15, color }} />
-      </div>
-      <div>
-        <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-color)" }}>{title}</div>
-        <div style={{ fontSize: 11, fontWeight: 400, color: "var(--text-color-secondary)", marginTop: 2 }}>{subtitle}</div>
-      </div>
-    </div>
-  )
-}
-
-function SectionTitle({ icon, title, hint, right }: { icon: string; title: React.ReactNode; hint?: string; right?: React.ReactNode }) {
-  return (
-    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-        <i className={icon} style={{ fontSize: 12, color: "#cc1111", marginTop: 2 }} />
-        <div>
-          <div style={fieldLabel}>{title}</div>
-          {hint && <div style={{ fontSize: 11, color: "var(--text-color-secondary)", marginTop: 2, lineHeight: 1.45 }}>{hint}</div>}
-        </div>
-      </div>
-      {right}
-    </div>
-  )
-}
-
-function Banner({ color, icon, children }: { color: string; icon: string; children: React.ReactNode }) {
-  return (
-    <div style={{
-      display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 12px", borderRadius: 8,
-      background: tint(color, 0.1), border: `1px solid ${tint(color, 0.3)}`, color, fontSize: 12, lineHeight: 1.5,
-    }}>
-      <i className={icon} style={{ fontSize: 13, marginTop: 2 }} />
-      <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
-    </div>
-  )
-}
-
 const WORKFLOW = ["Select", "Stage", "Commit", "Save"]
 
 function WorkflowSteps({ current }: { current: number }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-      {WORKFLOW.map((label, i) => {
-        const done = i < current
-        const active = i === current
-        const color = done ? "#2d7a2d" : active ? "#cc1111" : "var(--text-color-secondary)"
-        return (
-          <React.Fragment key={label}>
-            {i > 0 && <span style={{ width: 14, height: 1, background: "var(--surface-border)" }} />}
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: active ? 700 : 500, color }}>
-              <span style={{
-                width: 16, height: 16, borderRadius: "50%", fontSize: 9, fontWeight: 700,
-                display: "inline-flex", alignItems: "center", justifyContent: "center",
-                background: done ? "#2d7a2d" : active ? "#cc1111" : "transparent",
-                border: done || active ? "none" : BORDER, color: done || active ? "#fff" : "var(--text-color-secondary)",
-              }}>
-                {done ? <i className="pi pi-check" style={{ fontSize: 8 }} /> : i + 1}
-              </span>
-              {label}
-            </span>
-          </React.Fragment>
-        )
-      })}
-    </div>
+    <AmpStack direction="row" align="center" gap="xs" wrap="wrap">
+      {WORKFLOW.map((label, i) => (
+        <React.Fragment key={label}>
+          {i > 0 && <AmpBox w={14} h={1} bg="border" />}
+          <AmpChip size="sm" color={i < current ? "success" : i === current ? "primary" : "gray"}>
+            {i + 1}. {label}
+          </AmpChip>
+        </React.Fragment>
+      ))}
+    </AmpStack>
+  )
+}
+
+const resultColumns = (im: ReturnType<typeof useIntelometry>): ColumnDef<Diff>[] => [
+  {
+    id: "select", size: 40,
+    cell: ({ row }) => (
+      <AmpCheckbox
+        name={`result-${row.original.contractNumber}`}
+        checked={!!im.selected[row.original.contractNumber]}
+        onChange={() => im.setSelected(prev => ({ ...prev, [row.original.contractNumber]: !prev[row.original.contractNumber] }))}
+      />
+    ),
+  },
+  {
+    accessorKey: "contractNumber", header: "Contract Number",
+    cell: ({ getValue }) => <AmpTypography variant="body-sm" weight="semibold" as="span">{String(getValue())}</AmpTypography>,
+  },
+  { accessorKey: "accountName", header: "Account" },
+  { accessorKey: "newStart", header: "Start Date" },
+  { accessorKey: "newEnd", header: "End Date" },
+  { accessorKey: "newEmail", header: "Primary Email" },
+]
+
+function DiffLine({ label, from, to }: { label: string; from: string; to: string }) {
+  return (
+    <AmpBox style={{ display: "grid", gridTemplateColumns: "96px 1fr", gap: 8, alignItems: "baseline" }}>
+      <AmpTypography variant="body-sm" color="muted">{label}</AmpTypography>
+      <AmpStack direction="row" align="center" gap="sm" wrap="wrap">
+        <AmpTypography variant="body-sm" color="destructive" style={{ textDecoration: "line-through" }}>{from}</AmpTypography>
+        <AmpIcon icon={ArrowRight} size="xs" color="muted" />
+        <AmpTypography variant="body-sm" color="success" weight="semibold">{to}</AmpTypography>
+      </AmpStack>
+    </AmpBox>
   )
 }
 
@@ -1213,226 +918,158 @@ function IntelometryDialog({ im }: { im: ReturnType<typeof useIntelometry> }) {
   const saved = im.savedCount !== null
   const workflowStep = im.committed ? 3 : im.hasStaged ? 2 : im.anySelected ? 1 : 0
 
-  const diffLine = (label: string, from: string, to: string) => (
-    <div style={{ display: "grid", gridTemplateColumns: "96px 1fr", gap: 8, fontSize: 12, alignItems: "baseline" }}>
-      <span style={{ color: "var(--text-color-secondary)" }}>{label}</span>
-      <span>
-        <span style={{ textDecoration: "line-through", color: "#c14a3e" }}>{from}</span>
-        <i className="pi pi-arrow-right" style={{ fontSize: 9, margin: "0 8px", color: "var(--text-color-secondary)" }} />
-        <span style={{ color: "#2d7a2d", fontWeight: 600 }}>{to}</span>
-      </span>
-    </div>
-  )
-
   const footer = saved ? undefined : (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+    <AmpStack direction="row" align="center" justify="between" gap="md" wrap="wrap" w="full">
       {hasResults ? <WorkflowSteps current={workflowStep} /> : <span />}
-      <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={im.cancel} style={btnSecondary}>{hasResults ? "Cancel" : "Close"}</button>
+      <AmpStack direction="row" gap="sm">
+        <AmpButton variant="ghost" onClick={im.cancel}>{hasResults ? "Cancel" : "Close"}</AmpButton>
         {hasResults && (
           <>
-            <button onClick={im.stage} disabled={!im.anySelected} style={{ ...btnSecondary, ...disabledStyle(!im.anySelected) }}>
-              <i className="pi pi-inbox" style={{ fontSize: 11 }} />
-              Stage
-            </button>
-            <button onClick={im.openCommit} disabled={!im.hasStaged || im.committed}
-              style={{ ...btnSecondary, ...disabledStyle(!im.hasStaged || im.committed) }}>
-              <i className="pi pi-check-square" style={{ fontSize: 11 }} />
-              Commit
-            </button>
-            <button onClick={im.save} disabled={!im.committed} style={{ ...btnPrimary, ...disabledStyle(!im.committed) }}>
-              <i className="pi pi-save" style={{ fontSize: 11 }} />
-              Save
-            </button>
+            <AmpButton variant="outline" onClick={im.stage} disabled={!im.anySelected}>Stage</AmpButton>
+            <AmpButton variant="outline" onClick={im.openCommit} disabled={!im.hasStaged || im.committed}>Commit</AmpButton>
+            <AmpButton variant="primary" onClick={im.save} disabled={!im.committed}>Save</AmpButton>
           </>
         )}
-      </div>
-    </div>
+      </AmpStack>
+    </AmpStack>
   )
 
   return (
-    <Dialog
-      visible={im.open}
-      onHide={() => (saved ? im.closeSaved() : im.cancel())}
-      header={<DialogHeader icon="pi pi-sync" color="#2563eb" title="Intelometry Check"
-        subtitle="Reconcile contract dates and primary emails against Intelometry" />}
-      showHeader={!saved}
+    <AmpDialog
+      open={im.open}
+      onClose={() => (saved ? im.closeSaved() : im.cancel())}
+      title={saved ? undefined : "Intelometry Check"}
+      description={saved ? undefined : "Reconcile contract dates and primary emails against Intelometry"}
+      showClose={!saved}
+      aria-label="Intelometry Check"
       footer={footer}
-      style={{ width: 1200, maxWidth: "96vw" }}
-      pt={dialogPt}
-      modal
-      dismissableMask
+      maxWidth="xl"
+      fullWidth
+      className="ps:max-w-5xl"
     >
       {saved ? (
         <SuccessPanel title="Changes saved" message={`${im.savedCount} contract(s) updated in the account records.`} onClose={im.closeSaved} />
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <AmpStack gap="md">
           {im.bgRunning && (
-            <Banner color="#2563eb" icon="pi pi-spin pi-spinner">
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontWeight: 600 }}>Full-database search running in the background… this can take several minutes.</span>
-                <span onClick={im.cancel} style={{ marginLeft: "auto", textDecoration: "underline", cursor: "pointer", whiteSpace: "nowrap", fontWeight: 600 }}>
-                  Cancel search
-                </span>
-              </div>
-            </Banner>
+            <AmpAlert color="info" action={<AmpButton variant="link" size="sm" onClick={im.cancel}>Cancel search</AmpButton>}>
+              Full-database search running in the background… this can take several minutes.
+            </AmpAlert>
           )}
 
           {im.scheduledRun && (
-            <Banner color="#2563eb" icon="pi pi-spin pi-spinner">
-              <span style={{ fontWeight: 600 }}>Scheduled Intelometry query running (started {im.scheduledRun}).</span>{" "}
+            <AmpAlert color="info" title={`Scheduled Intelometry query running (started ${im.scheduledRun}).`}>
               Manual querying is disabled until it finishes.
-            </Banner>
+            </AmpAlert>
           )}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 14 }}>
-            <div style={sectionCard}>
-              <SectionTitle icon="pi pi-list" title="Query up to 5 contract numbers" hint="Look up specific contracts instantly." />
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {im.inputs.map((v, i) => (
-                  <div key={i} style={{ position: "relative" }}>
-                    <span style={{
-                      position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)",
-                      fontSize: 10, fontWeight: 700, color: "var(--text-color-secondary)", pointerEvents: "none",
-                    }}>{i + 1}</span>
-                    <input
-                      value={v}
-                      onChange={e => im.setInputs(prev => prev.map((p, j) => (j === i ? e.target.value : p)))}
-                      onKeyDown={e => { if (e.key === "Enter") im.runQuick() }}
-                      placeholder={`Contract number ${i + 1}`}
-                      disabled={im.manualLocked}
-                      style={{ ...nativeInput, width: "100%", paddingLeft: 24, ...disabledStyle(im.manualLocked) }}
-                    />
-                  </div>
-                ))}
-              </div>
-              <button onClick={im.runQuick} disabled={im.quickDisabled}
-                style={{ ...btnPrimary, alignSelf: "flex-end", ...disabledStyle(im.quickDisabled) }}>
-                <i className="pi pi-search" style={{ fontSize: 11 }} />
-                Search
-              </button>
-            </div>
 
-            <div style={sectionCard}>
-              <SectionTitle icon="pi pi-database" title="Query entire database"
-                hint="This process may take several minutes and can run in the background." />
-              <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: 10 }}>
+          <AmpGrid cols={{ xs: 1, md: 3 }} gap="md">
+            <Panel grow>
+              <SectionTitle title="Query up to 5 contract numbers" hint="Look up specific contracts instantly." />
+              <AmpStack gap="xs" onKeyDown={(e: React.KeyboardEvent) => { if (e.key === "Enter") im.runQuick() }}>
+                {im.inputs.map((v, i) => (
+                  <AmpTextInput
+                    key={i}
+                    name={`contract-${i + 1}`}
+                    value={v}
+                    placeholder={`Contract number ${i + 1}`}
+                    disabled={im.manualLocked}
+                    onChange={e => im.setInputs(prev => prev.map((p, j) => (j === i ? e.target.value : p)))}
+                  />
+                ))}
+              </AmpStack>
+              <AmpStack align="end">
+                <AmpButton variant="primary" onClick={im.runQuick} disabled={im.quickDisabled}>Search</AmpButton>
+              </AmpStack>
+            </Panel>
+
+            <Panel grow>
+              <SectionTitle title="Query entire database" hint="This process may take several minutes and can run in the background." />
+              <AmpStack grow justify="center" gap="sm">
                 {im.confirmOpen ? (
-                  <Banner color="#b45309" icon="pi pi-exclamation-triangle">
-                    <div>This will query the entire database and may take several minutes. It will continue running in the background. Continue?</div>
-                    <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                      <button onClick={im.confirmFull} style={btnPrimary}>Confirm</button>
-                      <button onClick={() => im.setConfirmOpen(false)} style={btnSecondary}>Cancel</button>
-                    </div>
-                  </Banner>
+                  <AmpAlert color="warning">
+                    <AmpStack gap="sm">
+                      <span>This will query the entire database and may take several minutes. It will continue running in the background. Continue?</span>
+                      <AmpStack direction="row" gap="sm">
+                        <AmpButton variant="primary" size="sm" onClick={im.confirmFull}>Confirm</AmpButton>
+                        <AmpButton variant="ghost" size="sm" onClick={() => im.setConfirmOpen(false)}>Cancel</AmpButton>
+                      </AmpStack>
+                    </AmpStack>
+                  </AmpAlert>
                 ) : (
-                  <div style={{
-                    border: "1px dashed var(--surface-border)", borderRadius: 8, padding: "18px 14px",
-                    display: "flex", flexDirection: "column", alignItems: "center", gap: 6, textAlign: "center",
-                  }}>
-                    <i className="pi pi-server" style={{ fontSize: 20, color: "var(--text-color-secondary)" }} />
-                    <div style={{ fontSize: 11, color: "var(--text-color-secondary)", maxWidth: 260, lineHeight: 1.5 }}>
-                      Scans every contract for differences. You can close this window while it runs.
-                    </div>
-                  </div>
+                  <EmptyNote>Scans every contract for differences. You can close this window while it runs.</EmptyNote>
                 )}
-              </div>
+              </AmpStack>
               {!im.confirmOpen && (
-                <button onClick={() => !im.fullDisabled && im.setConfirmOpen(true)} disabled={im.fullDisabled}
-                  style={{ ...btnPrimary, alignSelf: "flex-end", ...disabledStyle(im.fullDisabled) }}>
-                  <i className="pi pi-database" style={{ fontSize: 11 }} />
-                  Search
-                </button>
+                <AmpStack align="end">
+                  <AmpButton variant="primary" onClick={() => !im.fullDisabled && im.setConfirmOpen(true)} disabled={im.fullDisabled}>
+                    Search
+                  </AmpButton>
+                </AmpStack>
               )}
-            </div>
+            </Panel>
 
             <ScheduleCard now={im.now} />
-          </div>
+          </AmpGrid>
 
           {im.results && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <SectionTitle icon="pi pi-table" title="Results"
+            <AmpStack gap="sm">
+              <SectionTitle
+                title="Results"
                 hint={hasResults ? "Select the contracts to stage. Values shown are the new ones from Intelometry." : undefined}
-                right={hasResults && (
-                  <span style={{
-                    padding: "1px 8px", borderRadius: 20, fontSize: 11, fontWeight: 600,
-                    background: tint("#2563eb", 0.12), color: "#2563eb",
-                  }}>{im.results.length}</span>
-                )} />
+                right={hasResults && <AmpChip size="sm" color="info">{im.results.length}</AmpChip>}
+              />
               {hasResults ? (
-                <div style={{ border: BORDER, borderRadius: 8, overflow: "hidden" }}>
-                  <DataTable value={im.results} dataKey="contractNumber" size="small" style={{ background: "var(--surface-card)" }} pt={tablePt}
-                    onRowClick={e => {
-                      const cn = (e.data as Diff).contractNumber
-                      im.setSelected(prev => ({ ...prev, [cn]: !prev[cn] }))
-                    }}
-                  >
-                    <Column style={{ width: "2.5rem" }} body={(r: Diff) => (
-                      <input type="checkbox" readOnly checked={!!im.selected[r.contractNumber]} style={checkboxStyle} />
-                    )} />
-                    <Column field="contractNumber" header="Contract Number"
-                      body={(r: Diff) => <span style={{ fontWeight: 600 }}>{r.contractNumber}</span>} />
-                    <Column field="accountName" header="Account" />
-                    <Column field="newStart" header="Start Date" />
-                    <Column field="newEnd" header="End Date" />
-                    <Column field="newEmail" header="Primary Email" />
-                  </DataTable>
-                </div>
+                <AmpCard>
+                  <AmpDataTable columns={resultColumns(im)} data={im.results} />
+                </AmpCard>
               ) : (
-                <div style={{
-                  border: "1px dashed var(--surface-border)", borderRadius: 8, padding: "22px 14px",
-                  display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
-                }}>
-                  <i className="pi pi-inbox" style={{ fontSize: 20, color: "var(--text-color-secondary)" }} />
-                  <div style={{ fontSize: 12, color: "var(--text-color-secondary)" }}>No pending changes found for the given contract number(s).</div>
-                </div>
+                <EmptyNote>No pending changes found for the given contract number(s).</EmptyNote>
               )}
-            </div>
+            </AmpStack>
           )}
 
           {im.commitOpen && (
-            <div style={sectionCard}>
-              <SectionTitle icon="pi pi-pencil" title="Commit message" hint="Describe what changed and why, for traceability." />
-              <textarea
+            <Panel>
+              <SectionTitle title="Commit message" hint="Describe what changed and why, for traceability." />
+              <AmpTextArea
+                name="commit-message"
                 value={im.commitMessage}
-                onChange={e => im.setCommitMessage(e.target.value)}
                 placeholder="e.g. Aligning contract dates with Intelometry feed"
-                style={{ ...nativeInput, height: "auto", minHeight: 72, padding: 8, resize: "vertical", width: "100%" }}
+                onChange={e => im.setCommitMessage(e.target.value)}
               />
-              <button onClick={im.confirmCommit} disabled={!im.commitMessage.trim()}
-                style={{ ...btnPrimary, alignSelf: "flex-end", ...disabledStyle(!im.commitMessage.trim()) }}>
-                <i className="pi pi-check" style={{ fontSize: 11 }} />
-                Confirm commit
-              </button>
-            </div>
+              <AmpStack align="end">
+                <AmpButton variant="primary" onClick={im.confirmCommit} disabled={!im.commitMessage.trim()}>Confirm commit</AmpButton>
+              </AmpStack>
+            </Panel>
           )}
 
           {im.committed && (
-            <Banner color="#2d7a2d" icon="pi pi-check-circle">
-              Committed by <strong>{CURRENT_USER}</strong> — “{im.commitMessage}”
-            </Banner>
+            <AmpAlert color="success">
+              Committed by {CURRENT_USER} — “{im.commitMessage}”
+            </AmpAlert>
           )}
 
           {stagedDiffs.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <SectionTitle icon="pi pi-eye" title="Preview — before / after" />
+            <AmpStack gap="sm">
+              <SectionTitle title="Preview — before / after" />
               {stagedDiffs.map(d => (
-                <div key={d.contractNumber} style={{
-                  background: "var(--surface-section)", border: BORDER, borderLeft: "3px solid #cc1111", borderRadius: 8,
-                  padding: "10px 14px", display: "flex", flexDirection: "column", gap: 6,
-                }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-color)" }}>
-                    {d.accountName} <span style={{ color: "var(--text-color-secondary)", fontWeight: 500 }}>· {d.contractNumber}</span>
-                  </div>
-                  {d.oldStart !== d.newStart && diffLine("Start Date", d.oldStart, d.newStart)}
-                  {d.oldEnd !== d.newEnd && diffLine("End Date", d.oldEnd, d.newEnd)}
-                  {d.oldEmail !== d.newEmail && diffLine("Primary Email", d.oldEmail, d.newEmail)}
-                </div>
+                <AmpStack key={d.contractNumber} gap="xs" px="md" py="sm" bg="muted" border rounded="md"
+                  style={{ borderLeft: "3px solid var(--color-primary)" }}>
+                  <AmpStack direction="row" gap="xs" align="center">
+                    <AmpTypography variant="body-sm" weight="semibold">{d.accountName}</AmpTypography>
+                    <AmpTypography variant="body-sm" color="muted">· {d.contractNumber}</AmpTypography>
+                  </AmpStack>
+                  {d.oldStart !== d.newStart && <DiffLine label="Start Date" from={d.oldStart} to={d.newStart} />}
+                  {d.oldEnd !== d.newEnd && <DiffLine label="End Date" from={d.oldEnd} to={d.newEnd} />}
+                  {d.oldEmail !== d.newEmail && <DiffLine label="Primary Email" from={d.oldEmail} to={d.newEmail} />}
+                </AmpStack>
               ))}
-            </div>
+            </AmpStack>
           )}
-        </div>
+        </AmpStack>
       )}
-    </Dialog>
+    </AmpDialog>
   )
 }
 
@@ -1471,305 +1108,221 @@ function ScheduleEditor({ schedule, now, historyCount, savedNotice, onEdit, onSa
 }) {
   const [days, setDays] = useState<number[]>(schedule.days)
   const [slots, setSlots] = useState<string[]>(schedule.slots)
-  const { resolvedTheme } = useTheme()
 
   const validation = validateSchedule(days, slots)
   const dirty = formatDays(days) !== formatDays(schedule.days) || formatSlots(slots) !== formatSlots(schedule.slots)
   const canSave = dirty && !validation.message
   const nextRun = now ? nextScheduledRun(schedule, now) : null
+  // Slot-specific problems are shown on the first offending slot instead of below the list.
+  const firstBadSlot = validation.badSlots.size > 0 ? Math.min(...validation.badSlots) : -1
 
   const editDays = (next: number[]) => { setDays(next); onEdit() }
   const editSlots = (next: string[]) => { setSlots(next); onEdit() }
   const toggleDay = (d: number) => editDays(days.includes(d) ? days.filter(x => x !== d) : [...days, d])
 
-  const stepLabel = (n: number, text: string, right?: React.ReactNode) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-      <span style={{
-        width: 16, height: 16, borderRadius: "50%", fontSize: 9, fontWeight: 700, flexShrink: 0,
-        display: "inline-flex", alignItems: "center", justifyContent: "center",
-        background: "rgba(204,17,17,0.12)", color: "#cc1111",
-      }}>{n}</span>
-      <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-color)", flex: 1 }}>{text}</span>
+  const stepLabel = (n: number, text: string, right?: ReactNode) => (
+    <AmpStack direction="row" align="center" justify="between" gap="sm">
+      <AmpTypography variant="caption" weight="semibold">{n}. {text}</AmpTypography>
       {right}
-    </div>
+    </AmpStack>
   )
-  const linkBtn: React.CSSProperties = {
-    background: "none", border: "none", padding: 0, fontSize: 11, color: "#2563eb", cursor: "pointer", fontFamily: "inherit",
-  }
 
   return (
-    <div style={sectionCard}>
+    <Panel grow>
       <SectionTitle
-        icon="pi pi-calendar"
-        title={
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            Schedule
-            <HoverTip tip="Scheduling will query complete Intelometry database">
-              <i className="pi pi-info-circle" style={{ fontSize: 11, color: "var(--text-color-secondary)", cursor: "help" }} />
-            </HoverTip>
-          </span>
+        title="Schedule"
+        titleAddon={
+          <AmpTooltip content="Scheduling will query complete Intelometry database">
+            <span style={{ display: "inline-flex", cursor: "help" }}><AmpIcon icon={Info} size="xs" color="muted" /></span>
+          </AmpTooltip>
         }
         hint="Run the query automatically on set days and times."
       />
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {stepLabel(1, "Days of the week", (
-          <span style={{ display: "inline-flex", gap: 8 }}>
-            <button onClick={() => editDays([1, 2, 3, 4, 5])} style={linkBtn}>Weekdays</button>
-            <button onClick={() => editDays([...DAY_ORDER])} style={linkBtn}>Every day</button>
-            <button onClick={() => editDays([])} style={{ ...linkBtn, color: "var(--text-color-secondary)" }}>Clear</button>
-          </span>
-        ))}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
-          {DAY_ORDER.map(d => {
-            const on = days.includes(d)
-            return (
-              <button key={d} onClick={() => toggleDay(d)} style={{
-                height: 28, borderRadius: 6, fontSize: 11, fontWeight: on ? 700 : 500, cursor: "pointer", fontFamily: "inherit",
-                border: on ? "1px solid #cc1111" : BORDER,
-                background: on ? "rgba(204,17,17,0.10)" : "var(--surface-card)",
-                color: on ? "#cc1111" : "var(--text-color-secondary)",
-              }}>
-                {DAY_LABEL[d]}
-              </button>
-            )
-          })}
-        </div>
-      </div>
+      <AmpStack gap="xs">
+        {stepLabel(1, "Days of the week")}
+        <AmpStack direction="row" gap="xs" wrap="wrap">
+          <AmpButton variant="link" size="sm" onClick={() => editDays([1, 2, 3, 4, 5])}>Weekdays</AmpButton>
+          <AmpButton variant="link" size="sm" onClick={() => editDays([...DAY_ORDER])}>Every day</AmpButton>
+          <AmpButton variant="link" size="sm" onClick={() => editDays([])}>Clear</AmpButton>
+        </AmpStack>
+        <AmpGrid cols={7} gap="xs">
+          {DAY_ORDER.map(d => (
+            <AmpButton key={d} size="sm" variant={days.includes(d) ? "primary" : "outline"} aria-pressed={days.includes(d)} onClick={() => toggleDay(d)}>
+              {DAY_LABEL[d]}
+            </AmpButton>
+          ))}
+        </AmpGrid>
+      </AmpStack>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {stepLabel(2, "Time slots", (
-          <span style={{ fontSize: 11, color: "var(--text-color-secondary)" }}>{slots.length}/{MAX_SLOTS}</span>
-        ))}
+      <AmpStack gap="xs">
+        {stepLabel(2, "Time slots", <AmpTypography variant="caption" color="muted">{slots.length}/{MAX_SLOTS}</AmpTypography>)}
         {slots.map((slot, i) => (
-          <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <i className="pi pi-clock" style={{ fontSize: 11, color: "var(--text-color-secondary)", width: 14 }} />
-            <input
-              type="time"
-              value={slot}
-              onChange={e => editSlots(slots.map((s, j) => (j === i ? e.target.value : s)))}
-              style={{
-                ...nativeInput, flex: 1, colorScheme: resolvedTheme === "light" ? "light" : "dark",
-                borderColor: validation.badSlots.has(i) ? "#cc1111" : undefined,
-              }}
-            />
-            <button onClick={() => editSlots(slots.filter((_, j) => j !== i))} title="Remove time slot"
-              style={{ ...btnSecondary, width: CTRL_H, height: CTRL_H, padding: 0, justifyContent: "center" }}>
-              <i className="pi pi-trash" style={{ fontSize: 11 }} />
-            </button>
-          </div>
+          <AmpStack key={i} direction="row" align="start" gap="xs">
+            <AmpBox grow minW={0}>
+              <AmpTimePicker
+                name={`slot-${i}`}
+                value={slot || null}
+                error={i === firstBadSlot ? validation.message ?? undefined : undefined}
+                onChange={v => editSlots(slots.map((s, j) => (j === i ? v ?? "" : s)))}
+              />
+            </AmpBox>
+            <AmpStack h={40} justify="center">
+              <AmpButton variant="ghost" size="icon" tooltip="Remove time slot" aria-label="Remove time slot"
+                onClick={() => editSlots(slots.filter((_, j) => j !== i))}>
+                <AmpIcon icon={Trash2} size="sm" color="destructive" />
+              </AmpButton>
+            </AmpStack>
+          </AmpStack>
         ))}
         {slots.length < MAX_SLOTS && (
-          <button onClick={() => editSlots([...slots, ""])}
-            style={{ ...btnSecondary, alignSelf: "flex-start", borderStyle: "dashed" }}>
-            <i className="pi pi-plus" style={{ fontSize: 10 }} />
-            Add time slot
-          </button>
+          <AmpStack align="start">
+            <AmpButton variant="outline" size="sm" leftIcon={<AmpIcon icon={Plus} size="sm" />} onClick={() => editSlots([...slots, ""])}>
+              Add time slot
+            </AmpButton>
+          </AmpStack>
         )}
-        <div style={{ fontSize: 10, color: "var(--text-color-secondary)", lineHeight: 1.45 }}>
+        <AmpTypography variant="footnote" color="muted">
           At least 2 hours apart, up to {MAX_SLOTS} scheduled queries per day. Manual queries are unlimited.
-        </div>
-        {validation.message && <div style={errorText}>{validation.message}</div>}
-      </div>
+        </AmpTypography>
+        {validation.message && firstBadSlot < 0 && (
+          <AmpTypography variant="caption" color="destructive">{validation.message}</AmpTypography>
+        )}
+      </AmpStack>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <AmpStack gap="xs">
         {stepLabel(3, "Save")}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ flex: 1, fontSize: 11, color: savedNotice ? "#2d7a2d" : "var(--text-color-secondary)" }}>
-            {savedNotice ? (
-              <><i className="pi pi-check" style={{ fontSize: 10, marginRight: 4 }} />Schedule saved</>
-            ) : dirty ? "Unsaved changes" : nextRun ? `Next run: ${nextRun}` : "Scheduling is off"}
-          </span>
+        <AmpStack direction="row" align="center" gap="sm">
+          <AmpBox grow>
+            <AmpTypography variant="caption" color={savedNotice ? "success" : "muted"}>
+              {savedNotice ? "Schedule saved" : dirty ? "Unsaved changes" : nextRun ? `Next run: ${nextRun}` : "Scheduling is off"}
+            </AmpTypography>
+          </AmpBox>
           {dirty && (
-            <button onClick={() => { setDays(schedule.days); setSlots(schedule.slots) }} style={btnSecondary}>Discard</button>
+            <AmpButton variant="ghost" size="sm" onClick={() => { setDays(schedule.days); setSlots(schedule.slots) }}>Discard</AmpButton>
           )}
-          <button onClick={() => canSave && onSave(days, slots)} disabled={!canSave}
-            style={{ ...btnPrimary, ...disabledStyle(!canSave) }}>
-            <i className="pi pi-save" style={{ fontSize: 11 }} />
-            Save
-          </button>
-        </div>
-      </div>
+          <AmpButton variant="primary" size="sm" onClick={() => canSave && onSave(days, slots)} disabled={!canSave}>Save</AmpButton>
+        </AmpStack>
+      </AmpStack>
 
-      <div style={{
-        marginTop: "auto", background: "var(--surface-card)", border: BORDER, borderRadius: 8, padding: "8px 10px",
-        display: "flex", alignItems: "center", gap: 8,
-      }}>
-        <i className="pi pi-user-edit" style={{ fontSize: 13, color: "var(--text-color-secondary)" }} />
-        <div style={{ flex: 1, minWidth: 0, lineHeight: 1.4 }}>
-          <div style={{ fontSize: 10, color: "var(--text-color-secondary)" }}>Last configured by</div>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-color)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {schedule.updatedBy}{schedule.updatedBy === CURRENT_USER ? " (you)" : ""}
-          </div>
-          <div style={{ fontSize: 10, color: "var(--text-color-secondary)" }}>on {schedule.updatedAt}</div>
-        </div>
-        <button onClick={onHistory} style={{ ...btnSecondary, padding: "0.25rem 0.625rem", fontSize: 11 }}>
-          <i className="pi pi-history" style={{ fontSize: 11 }} />
-          History
-          <span style={{
-            padding: "0 6px", borderRadius: 20, fontSize: 10, fontWeight: 600,
-            background: "var(--surface-section)", color: "var(--text-color-secondary)",
-          }}>{historyCount}</span>
-        </button>
-      </div>
-    </div>
+      <AmpStack direction="row" align="center" gap="sm" p="sm" bg="card" border rounded="md" style={{ marginTop: "auto" }}>
+        <AmpStack gap="none" grow minW={0}>
+          <AmpTypography variant="footnote" color="muted">Last configured by</AmpTypography>
+          <AmpBox truncate>
+            <AmpTypography variant="caption" weight="semibold" as="span">
+              {schedule.updatedBy}{schedule.updatedBy === CURRENT_USER ? " (you)" : ""}
+            </AmpTypography>
+          </AmpBox>
+          <AmpTypography variant="footnote" color="muted">on {schedule.updatedAt}</AmpTypography>
+        </AmpStack>
+        <AmpButton variant="outline" size="sm" onClick={onHistory}>History ({historyCount})</AmpButton>
+      </AmpStack>
+    </Panel>
   )
 }
 
+type HistoryRow = { at: string; by: string; changes: string[]; key: string; current: boolean }
+
+const historyColumns: ColumnDef<HistoryRow>[] = [
+  { accessorKey: "at", header: "Changed on", cell: ({ getValue }) => <span style={{ whiteSpace: "nowrap" }}>{String(getValue())}</span> },
+  {
+    accessorKey: "by", header: "Changed by",
+    cell: ({ row }) => (
+      <AmpStack gap="xs" align="start">
+        <AmpTypography variant="body-sm" weight="semibold">
+          {row.original.by}{row.original.by === CURRENT_USER ? " (you)" : ""}
+        </AmpTypography>
+        {row.original.current && <AmpChip size="sm" color="success">Current</AmpChip>}
+      </AmpStack>
+    ),
+  },
+  {
+    id: "changes", header: "Changes",
+    cell: ({ row }) => (
+      <AmpStack gap="xs">
+        {row.original.changes.map((c, i) => <AmpTypography key={i} variant="body-sm">{c}</AmpTypography>)}
+      </AmpStack>
+    ),
+  },
+]
+
 function ScheduleHistoryDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { intelometrySchedule: schedule, scheduleHistory } = useAccountManager()
-  const rows = [...scheduleHistory].reverse().map((h, i) => ({ ...h, key: `${h.at}-${i}`, current: i === 0 }))
+  const rows: HistoryRow[] = [...scheduleHistory].reverse().map((h, i) => ({ ...h, key: `${h.at}-${i}`, current: i === 0 }))
 
   return (
-    <Dialog
-      visible={open}
-      onHide={onClose}
-      header={<DialogHeader icon="pi pi-history" color="#2563eb" title="Schedule history"
-        subtitle="Every change to the Intelometry schedule, newest first" />}
-      footer={<div style={{ display: "flex", justifyContent: "flex-end" }}><button onClick={onClose} style={btnSecondary}>Close</button></div>}
-      style={{ width: 720, maxWidth: "95vw" }}
-      pt={dialogPt}
-      modal
-      dismissableMask
+    <AmpDialog
+      open={open}
+      onClose={onClose}
+      closeOnBackdropClick
+      title="Schedule history"
+      description="Every change to the Intelometry schedule, newest first"
+      footer={<AmpButton variant="ghost" onClick={onClose}>Close</AmpButton>}
+      maxWidth="lg"
+      fullWidth
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <div style={{ ...sectionCard, flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <i className="pi pi-calendar" style={{ fontSize: 16, color: "#cc1111" }} />
-          <div style={{ flex: 1 }}>
-            <div style={fieldLabel}>Current settings</div>
-            <div style={{ fontSize: 11, color: "var(--text-color-secondary)", marginTop: 2 }}>
-              {schedule.days.length === 0 && schedule.slots.length === 0
-                ? "Scheduling is off"
-                : `${formatDays(schedule.days)} at ${formatSlots(schedule.slots)}`}
-            </div>
-          </div>
-        </div>
-        <div style={{ border: BORDER, borderRadius: 8, overflow: "hidden" }}>
-          <DataTable value={rows} dataKey="key" size="small" style={{ background: "var(--surface-card)" }} pt={tablePt}>
-            <Column field="at" header="Changed on" style={{ whiteSpace: "nowrap", verticalAlign: "top" }} />
-            <Column header="Changed by" style={{ verticalAlign: "top" }} body={(r: typeof rows[number]) => (
-              <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}>
-                <span style={{ fontWeight: 600, color: "var(--text-color)" }}>{r.by}{r.by === CURRENT_USER ? " (you)" : ""}</span>
-                {r.current && (
-                  <span style={{
-                    display: "inline-flex", alignItems: "center", gap: 5, padding: "1px 8px", borderRadius: 20,
-                    fontSize: 10, fontWeight: 600, background: tint("#2d7a2d", 0.14), color: "#2d7a2d",
-                  }}>
-                    <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#2d7a2d" }} />
-                    Current
-                  </span>
-                )}
-              </div>
-            )} />
-            <Column header="Changes" body={(r: typeof rows[number]) => (
-              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                {r.changes.map((c, i) => <span key={i} style={{ color: "var(--text-color)" }}>{c}</span>)}
-              </div>
-            )} />
-          </DataTable>
-        </div>
-      </div>
-    </Dialog>
+      <AmpStack gap="md">
+        <Panel>
+          <AmpTypography variant="body-sm" weight="semibold">Current settings</AmpTypography>
+          <AmpTypography variant="caption" color="muted">
+            {schedule.days.length === 0 && schedule.slots.length === 0
+              ? "Scheduling is off"
+              : `${formatDays(schedule.days)} at ${formatSlots(schedule.slots)}`}
+          </AmpTypography>
+        </Panel>
+        <AmpCard>
+          <AmpDataTable columns={historyColumns} data={rows} />
+        </AmpCard>
+      </AmpStack>
+    </AmpDialog>
   )
 }
 
 function SuccessPanel({ title, message, onClose }: { title: string; message: string; onClose: () => void }) {
   return (
-    <div style={{ padding: "28px 24px 12px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-      <div style={{
-        width: 56, height: 56, borderRadius: "50%", background: tint("#2d7a2d", 0.12),
-        display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 4,
-      }}>
-        <i className="pi pi-check" style={{ fontSize: 24, color: "#2d7a2d" }} />
-      </div>
-      <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text-color)" }}>{title}</div>
-      <div style={{ fontSize: 12, color: "var(--text-color-secondary)", maxWidth: 380, lineHeight: 1.5 }}>{message}</div>
-      <button onClick={onClose} style={{ ...btnPrimary, marginTop: 10, padding: "0.45rem 1.5rem" }}>Close</button>
-    </div>
+    <AmpStack align="center" gap="sm" pt="lg" pb="sm" px="lg" textAlign="center">
+      <AmpStatusIcon status="done" size="lg" hideTooltip />
+      <AmpTypography variant="h3">{title}</AmpTypography>
+      <AmpBox maxW={380}>
+        <AmpTypography variant="body-sm" color="muted" align="center">{message}</AmpTypography>
+      </AmpBox>
+      <AmpBox mt="sm">
+        <AmpButton variant="primary" onClick={onClose}>Close</AmpButton>
+      </AmpBox>
+    </AmpStack>
   )
 }
 
 // ── Notify ─────────────────────────────────────────────────────────────────────
-type Association = { checked: boolean; query: string; selected: string | null; open: boolean }
-const emptyAssociation = (): Association => ({ checked: false, query: "", selected: null, open: false })
+type Association = { checked: boolean; selected: string | null }
+const emptyAssociation = (): Association => ({ checked: false, selected: null })
 type SingleRow = { value: string; assoc: Association }
 
-function AssociatePicker({ assoc, onChange, accountNames, taken, labelSize = 12 }: {
+function AssociatePicker({ name, assoc, onChange, accountNames, taken }: {
+  name: string
   assoc: Association
   onChange: (next: Association) => void
   accountNames: string[]
   taken: Set<string>
-  labelSize?: number
 }) {
-  // Only an exact existing account name counts as a selection; free text never does.
-  const q = assoc.query.trim().toLowerCase()
-  const matches = (q ? accountNames.filter(n => n.toLowerCase().includes(q)) : accountNames)
-    .filter(n => !taken.has(n))
-    .slice(0, 8)
-  const invalid = assoc.checked && assoc.query.trim().length > 0 && !assoc.selected
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-        <input
-          type="checkbox"
-          checked={assoc.checked}
-          onChange={() => onChange(assoc.checked ? emptyAssociation() : { ...assoc, checked: true })}
-          style={checkboxStyle}
-        />
-        <span style={{ fontSize: labelSize, color: "var(--text-color)" }}>Associate to account</span>
-      </label>
+    <AmpStack gap="xs">
+      <AmpCheckbox
+        name={`${name}-associate`}
+        label="Associate to account"
+        checked={assoc.checked}
+        onChange={() => onChange(assoc.checked ? emptyAssociation() : { ...assoc, checked: true })}
+      />
       {assoc.checked && (
-        <>
-          <div style={{ position: "relative" }}>
-            <input
-              value={assoc.query}
-              onChange={e => {
-                const v = e.target.value
-                const names = new Set(accountNames)
-                onChange({ ...assoc, query: v, open: true, selected: names.has(v) && !taken.has(v) ? v : null })
-              }}
-              onClick={() => onChange({ ...assoc, open: true })}
-              placeholder="Type to search accounts..."
-              style={{ ...nativeInput, width: "100%" }}
-            />
-            {assoc.open && (
-              <>
-                <div onClick={() => onChange({ ...assoc, open: false })} style={{ ...backdrop, zIndex: 10 }} />
-                <div style={{
-                  ...popoverStyle, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 11,
-                  maxHeight: 190, overflowY: "auto", padding: 4,
-                }}>
-                  {matches.map(name => <MatchItem key={name} name={name}
-                    onChoose={() => onChange({ ...assoc, query: name, selected: name, open: false })} />)}
-                  {matches.length === 0 && (
-                    <div style={{ padding: "7px 10px", fontSize: 12, color: "var(--text-color-secondary)" }}>No matching accounts.</div>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-          {invalid && <div style={errorText}>Select an existing account from the list.</div>}
-        </>
+        <AmpSelect
+          name={`${name}-account`}
+          placeholder="Type to search accounts..."
+          value={assoc.selected ?? ""}
+          dropdownItems={accountNames.filter(n => !taken.has(n) || n === assoc.selected).map(n => ({ id: n, alias: n }))}
+          onChange={v => onChange({ ...assoc, selected: v || null })}
+        />
       )}
-    </div>
-  )
-}
-
-function MatchItem({ name, onChoose }: { name: string; onChoose: () => void }) {
-  const [hover, setHover] = useState(false)
-  return (
-    <div
-      onClick={onChoose}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        padding: "7px 10px", fontSize: 12, borderRadius: 4, cursor: "pointer", color: "var(--text-color)",
-        background: hover ? "var(--surface-hover)" : "transparent",
-      }}
-    >
-      {name}
-    </div>
+    </AmpStack>
   )
 }
 
@@ -1829,185 +1382,126 @@ function NotifyDialog({ open, onClose, accountNames, onSent }: {
     setSentSummary(summary)
   }
 
-  const footer = sentSummary !== null ? undefined : (
-    <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-      {confirmOpen ? (
-        <>
-          <button onClick={() => setConfirmOpen(false)} style={btnSecondary}>Back</button>
-          <button onClick={confirmSend} style={btnPrimary}>
-            <i className="pi pi-send" style={{ fontSize: 11 }} />
-            Confirm
-          </button>
-        </>
-      ) : (
-        <>
-          <button onClick={onClose} style={btnSecondary}>Cancel</button>
-          <button onClick={() => !sendDisabled && setConfirmOpen(true)} disabled={sendDisabled}
-            style={{ ...btnPrimary, ...disabledStyle(sendDisabled) }}>
-            <i className="pi pi-send" style={{ fontSize: 11 }} />
-            Send
-          </button>
-        </>
-      )}
-    </div>
+  const footer = sentSummary !== null ? undefined : confirmOpen ? (
+    <>
+      <AmpButton variant="ghost" onClick={() => setConfirmOpen(false)}>Back</AmpButton>
+      <AmpButton variant="primary" onClick={confirmSend}>Confirm</AmpButton>
+    </>
+  ) : (
+    <>
+      <AmpButton variant="ghost" onClick={onClose}>Cancel</AmpButton>
+      <AmpButton variant="primary" onClick={() => !sendDisabled && setConfirmOpen(true)} disabled={sendDisabled}>Send</AmpButton>
+    </>
   )
 
-  const modeOption = (key: "group" | "single", icon: string, title: string, desc: string, onPick: () => void) => {
-    const selected = mode === key
-    return (
-      <button onClick={onPick} style={{
-        flex: 1, display: "flex", alignItems: "flex-start", gap: 10, textAlign: "left", cursor: "pointer",
-        padding: "12px 14px", borderRadius: 10, fontFamily: "inherit",
-        border: selected ? "1.5px solid #cc1111" : BORDER,
-        background: selected ? "rgba(204,17,17,0.06)" : "var(--surface-card)",
-      }}>
-        <div style={{
-          width: 30, height: 30, borderRadius: 8, flexShrink: 0,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          background: selected ? "rgba(204,17,17,0.12)" : "var(--surface-section)",
-        }}>
-          <i className={icon} style={{ fontSize: 13, color: selected ? "#cc1111" : "var(--text-color-secondary)" }} />
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: selected ? "#cc1111" : "var(--text-color)" }}>{title}</div>
-          <div style={{ fontSize: 11, color: "var(--text-color-secondary)", marginTop: 2, lineHeight: 1.4 }}>{desc}</div>
-        </div>
-        <span style={{
-          width: 14, height: 14, borderRadius: "50%", flexShrink: 0, marginTop: 2, boxSizing: "border-box",
-          border: selected ? "4px solid #cc1111" : BORDER, background: "var(--surface-card)",
-        }} />
-      </button>
-    )
-  }
-
   return (
-    <Dialog
-      visible={open}
-      onHide={() => (confirmOpen ? setConfirmOpen(false) : onClose())}
-      header={<DialogHeader icon="pi pi-send" color="#2d7a2d" title="Notify" subtitle="Send the Welcome packet email to one or more recipients" />}
-      showHeader={sentSummary === null}
+    <AmpDialog
+      open={open}
+      onClose={() => (confirmOpen ? setConfirmOpen(false) : onClose())}
+      title={sentSummary === null ? "Notify" : undefined}
+      description={sentSummary === null ? "Send the Welcome packet email to one or more recipients" : undefined}
+      showClose={sentSummary === null}
+      aria-label="Notify"
       footer={footer}
-      style={{ width: 600, maxWidth: "95vw" }}
-      pt={dialogPt}
-      modal
-      dismissableMask
+      maxWidth="lg"
+      fullWidth
     >
       {sentSummary !== null ? (
         <SuccessPanel title="Notification sent" message={sentSummary} onClose={onClose} />
       ) : confirmOpen ? (
-        <Banner color="#b45309" icon="pi pi-exclamation-triangle">
-          <div style={{ fontWeight: 700, marginBottom: 4 }}>Confirm send</div>
-          {confirmMessage}
-        </Banner>
+        <AmpAlert color="warning" title="Confirm send">{confirmMessage}</AmpAlert>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={fieldLabel}>Delivery method</span>
-              <HoverTip tip="If associating to same account, send group email.">
-                <i className="pi pi-info-circle" style={{ fontSize: 12, color: "var(--text-color-secondary)", cursor: "help" }} />
-              </HoverTip>
-            </div>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              {modeOption("group", "pi pi-users", "Send group email", "One email to several recipients on the same account.",
-                () => setMode("group"))}
-              {modeOption("single", "pi pi-user", "Send single email", "Separate emails, each tied to its own account.",
-                () => { setMode("single"); setGroupAssoc(emptyAssociation()) })}
-            </div>
-          </div>
+        <AmpStack gap="md">
+          <AmpOptionCard
+            name="delivery"
+            label="Delivery method"
+            tooltip="If associating to same account, send group email."
+            value={mode ?? undefined}
+            onChange={v => {
+              setMode(v as "group" | "single")
+              if (v === "single") setGroupAssoc(emptyAssociation())
+            }}
+            items={[
+              { value: "group", label: "Send group email", description: "One email to several recipients on the same account." },
+              { value: "single", label: "Send single email", description: "Separate emails, each tied to its own account." },
+            ]}
+          />
 
           {mode === "group" && (
-            <div style={sectionCard}>
-              <SectionTitle icon="pi pi-envelope" title="Recipients (comma-separated)" hint="Separate multiple addresses with commas." />
-              <input
-                value={groupInput}
-                onChange={e => setGroupInput(e.target.value)}
+            <Panel>
+              <AmpTextInput
+                name="group-recipients"
+                label="Recipients (comma-separated)"
+                helperText="Separate multiple addresses with commas."
                 placeholder="name1@domain.com, name2@domain.com"
-                style={{ ...nativeInput, width: "100%", borderColor: groupError ? "#cc1111" : undefined }}
+                value={groupInput}
+                error={groupError ? "Enter one or more valid emails, separated by commas (e.g. name@domain.com)." : undefined}
+                onChange={e => setGroupInput(e.target.value)}
               />
-              {groupError && <div style={errorText}>Enter one or more valid emails, separated by commas (e.g. name@domain.com).</div>}
               {groupEmails.length > 0 && groupValid && (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {groupEmails.map((e, i) => (
-                    <span key={i} style={{
-                      display: "inline-flex", alignItems: "center", gap: 5, padding: "2px 8px", borderRadius: 20,
-                      fontSize: 11, background: "var(--surface-card)", border: BORDER, color: "var(--text-color)",
-                    }}>
-                      <i className="pi pi-envelope" style={{ fontSize: 9, color: "var(--text-color-secondary)" }} />
-                      {e}
-                    </span>
-                  ))}
-                </div>
+                <AmpStack direction="row" wrap="wrap" gap="xs">
+                  {groupEmails.map((e, i) => <AmpChip key={i} size="sm" color="gray">{e}</AmpChip>)}
+                </AmpStack>
               )}
-              <div style={{ height: 1, background: "var(--surface-border)", margin: "2px 0" }} />
-              <AssociatePicker assoc={groupAssoc} onChange={setGroupAssoc} accountNames={accountNames} taken={new Set()} />
-            </div>
+              <Divider />
+              <AssociatePicker name="group" assoc={groupAssoc} onChange={setGroupAssoc} accountNames={accountNames} taken={new Set()} />
+            </Panel>
           )}
 
           {mode === "single" && (
-            <div style={sectionCard}>
-              <SectionTitle icon="pi pi-envelope" title="Recipients" hint="Each address receives its own email."
-                right={<span style={{ fontSize: 11, color: "var(--text-color-secondary)" }}>{singleRows.length}/10</span>} />
+            <Panel>
+              <SectionTitle title="Recipients" hint="Each address receives its own email."
+                right={<AmpTypography variant="caption" color="muted">{singleRows.length}/10</AmpTypography>} />
               {singleRows.map((row, i) => (
-                <div key={i} style={{
-                  background: "var(--surface-card)", border: BORDER, borderRadius: 8, padding: "10px 12px",
-                  display: "flex", flexDirection: "column", gap: 8,
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{
-                      width: 20, height: 20, borderRadius: "50%", flexShrink: 0, fontSize: 10, fontWeight: 700,
-                      display: "inline-flex", alignItems: "center", justifyContent: "center",
-                      background: "var(--surface-section)", color: "var(--text-color-secondary)",
-                    }}>{i + 1}</span>
-                    <input
-                      value={row.value}
-                      onChange={e => patchRow(i, { value: e.target.value })}
-                      placeholder="name@domain.com"
-                      style={{
-                        ...nativeInput, flex: 1,
-                        borderColor: row.value.trim() && !EMAIL_RE.test(row.value.trim()) ? "#cc1111" : undefined,
-                      }}
-                    />
+                <AmpStack key={i} gap="sm" p="sm" bg="card" border rounded="md">
+                  <AmpStack direction="row" align="start" gap="sm">
+                    <AmpStack h={40} justify="center">
+                      <AmpChip size="sm" color="gray">{i + 1}</AmpChip>
+                    </AmpStack>
+                    <AmpBox grow minW={0}>
+                      <AmpTextInput
+                        name={`recipient-${i}`}
+                        placeholder="name@domain.com"
+                        value={row.value}
+                        error={row.value.trim() && !EMAIL_RE.test(row.value.trim()) ? "Enter a valid email (e.g. name@domain.com)." : undefined}
+                        onChange={e => patchRow(i, { value: e.target.value })}
+                      />
+                    </AmpBox>
                     {singleRows.length > 1 && (
-                      <button onClick={() => setSingleRows(rows => rows.filter((_, j) => j !== i))} title="Remove"
-                        style={{ ...btnSecondary, width: CTRL_H, height: CTRL_H, padding: 0, justifyContent: "center" }}>
-                        <i className="pi pi-trash" style={{ fontSize: 11 }} />
-                      </button>
+                      <AmpStack h={40} justify="center">
+                        <AmpButton variant="ghost" size="icon" tooltip="Remove" aria-label="Remove recipient"
+                          onClick={() => setSingleRows(rows => rows.filter((_, j) => j !== i))}>
+                          <AmpIcon icon={Trash2} size="sm" color="destructive" />
+                        </AmpButton>
+                      </AmpStack>
                     )}
-                  </div>
-                  <div style={{ paddingLeft: 28 }}>
+                  </AmpStack>
+                  <AmpBox pl={36}>
                     <AssociatePicker
+                      name={`recipient-${i}`}
                       assoc={row.assoc}
                       onChange={assoc => patchRow(i, { assoc })}
                       accountNames={accountNames}
                       taken={takenByOthers(i)}
-                      labelSize={11}
                     />
-                  </div>
-                </div>
+                  </AmpBox>
+                </AmpStack>
               ))}
               {singleRows.length < 10 && (
-                <button onClick={() => setSingleRows(rows => [...rows, { value: "", assoc: emptyAssociation() }])}
-                  style={{ ...btnSecondary, alignSelf: "flex-start", borderStyle: "dashed" }}>
-                  <i className="pi pi-plus" style={{ fontSize: 10 }} />
-                  Add recipient
-                </button>
+                <AmpStack align="start">
+                  <AmpButton variant="outline" size="sm" leftIcon={<AmpIcon icon={Plus} size="sm" />}
+                    onClick={() => setSingleRows(rows => [...rows, { value: "", assoc: emptyAssociation() }])}>
+                    Add recipient
+                  </AmpButton>
+                </AmpStack>
               )}
-              {singleError && <div style={errorText}>Enter a valid email in every box (e.g. name@domain.com).</div>}
-            </div>
+              {singleError && <AmpTypography variant="caption" color="destructive">Enter a valid email in every box (e.g. name@domain.com).</AmpTypography>}
+            </Panel>
           )}
 
-          {mode === null && (
-            <div style={{
-              border: "1px dashed var(--surface-border)", borderRadius: 8, padding: "18px 14px",
-              display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
-            }}>
-              <i className="pi pi-envelope" style={{ fontSize: 20, color: "var(--text-color-secondary)" }} />
-              <div style={{ fontSize: 12, color: "var(--text-color-secondary)" }}>Choose how you’d like to send this notification.</div>
-            </div>
-          )}
-        </div>
+          {mode === null && <EmptyNote>Choose how you’d like to send this notification.</EmptyNote>}
+        </AmpStack>
       )}
-    </Dialog>
+    </AmpDialog>
   )
 }
