@@ -18,12 +18,6 @@ const nativeInput: React.CSSProperties = {
   background: "var(--surface-card)", color: "var(--text-color)", outline: "none",
   fontFamily: "inherit", boxSizing: "border-box",
 }
-const nativeSelect: React.CSSProperties = { ...nativeInput, cursor: "pointer" }
-const btnPrimary: React.CSSProperties = {
-  background: "#cc1111", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600,
-  padding: "0 14px", height: CTRL_H, color: "#fff", cursor: "pointer",
-  display: "inline-flex", alignItems: "center", gap: 6,
-}
 const btnSecondary: React.CSSProperties = {
   background: "none", border: BORDER, borderRadius: 6, fontSize: 12,
   padding: "0 12px", height: CTRL_H, color: "var(--text-color)", cursor: "pointer",
@@ -102,8 +96,8 @@ function SendToSapCell({ status }: { status: SendStatus }) {
 }
 
 function ClearableSelect({
-  value, onChange, options, placeholder,
-}: { value: string; onChange: (v: string) => void; options: string[]; placeholder: string }) {
+  value, onChange, options,
+}: { value: string; onChange: (v: string) => void; options: string[] }) {
   return (
     <div style={{ display: "flex", alignItems: "center", border: BORDER, borderRadius: 6, height: CTRL_H, background: "var(--surface-card)", overflow: "hidden" }}>
       <select
@@ -378,20 +372,20 @@ function InvoiceTable({
           {/* Filter by Entity */}
           <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
             <label style={{ fontSize: 10, fontWeight: 500, color: "var(--text-color-secondary)" }}>Filter by Entity</label>
-            <ClearableSelect value={entityFilter} onChange={setEntityFilter} options={ERCOT_ENTITIES} placeholder="All" />
+            <ClearableSelect value={entityFilter} onChange={setEntityFilter} options={ERCOT_ENTITIES} />
           </div>
 
           {/* Filter by Report Type */}
           <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
             <label style={{ fontSize: 10, fontWeight: 500, color: "var(--text-color-secondary)" }}>Filter by Report Type</label>
-            <ClearableSelect value={typeFilter} onChange={setTypeFilter} options={reportTypeOptions} placeholder="All" />
+            <ClearableSelect value={typeFilter} onChange={setTypeFilter} options={reportTypeOptions} />
           </div>
 
           {/* Counterparty filter (ETRM only) */}
           {showCounterpartyFilter && (
             <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
               <label style={{ fontSize: 10, fontWeight: 500, color: "var(--text-color-secondary)" }}>Counterparty</label>
-              <ClearableSelect value={cpFilter} onChange={setCpFilter} options={counterpartyOptions} placeholder="All" />
+              <ClearableSelect value={cpFilter} onChange={setCpFilter} options={counterpartyOptions} />
             </div>
           )}
 

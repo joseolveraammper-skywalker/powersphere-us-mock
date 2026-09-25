@@ -7,7 +7,7 @@ import {
 } from "@tanstack/react-table"
 import { BarChart3, BookOpen, CreditCard, FileText, ListChecks, Users, type LucideIcon } from "lucide-react"
 import {
-  AmpBox, AmpButton, AmpCard, AmpChip, AmpDataTable, AmpDataTablePagination, AmpDialog, AmpFileIcon,
+  AmpBox, AmpButton, AmpCard, AmpDataTable, AmpDataTablePagination, AmpDialog, AmpFileIcon,
   AmpGrid, AmpIcon, AmpRefetchIcon, AmpSearchInput, AmpStack, AmpTabs, AmpTypography,
 } from "@powersphere/shared-tw"
 import { DashboardLayout } from "@/components/power-sphere/dashboard-layout"

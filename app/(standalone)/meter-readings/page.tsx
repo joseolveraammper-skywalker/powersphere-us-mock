@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useMemo, useCallback } from "react"
+import React, { useState, useMemo } from "react"
 import { DashboardLayout } from "@/components/power-sphere/dashboard-layout"
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -11,11 +11,6 @@ import {
 const BORDER = "1px solid var(--surface-border)"
 const CTRL_H = "30px"
 
-const nativeInput: React.CSSProperties = {
-  height: CTRL_H, padding: "0 8px", fontSize: 12, border: BORDER, borderRadius: 6,
-  background: "var(--surface-card)", color: "var(--text-color)", outline: "none",
-  fontFamily: "inherit", boxSizing: "border-box",
-}
 const btnSecondary: React.CSSProperties = {
   background: "none", border: BORDER, borderRadius: 6, fontSize: 12, fontWeight: 600,
   padding: "0 12px", height: CTRL_H, color: "var(--text-color)", cursor: "pointer",

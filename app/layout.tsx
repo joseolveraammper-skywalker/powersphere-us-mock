@@ -12,6 +12,7 @@ import '@powersphere/shared-tw/styles.css'
 import './shared-tw-tokens.css'
 import './globals.css'
 
+// Unused bindings on purpose: calling next/font registers the "Geist" @font-face that globals.css's --font-sans refers to
 const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
