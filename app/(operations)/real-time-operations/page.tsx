@@ -281,8 +281,7 @@ export default function RealTimeOperationsPage() {
   const [activeTab, setActiveTab] = useState(0)
 
   const [reports, setReports]               = useState<Report[]>(INITIAL_REPORTS)
-  const [selectedReports, setSelectedReports] = useState<Report[]>([])
-  const selectedIds = useMemo(() => new Set(selectedReports.map(r => r.id)), [selectedReports])
+  const [selectedIds, setSelectedIds]       = useState<Set<number>>(new Set())
   const [previewReportId, setPreviewReportId] = useState<number | null>(null)
   const [pdfPage, setPdfPage]         = useState(1)
 
@@ -329,6 +328,8 @@ export default function RealTimeOperationsPage() {
   }), [reports, reportStartDate, reportEndDate, reportFilterCustomer, reportFilterAsset, reportFilterResourceType, reportFilterQuery])
 
   // ── Selection helpers ──
+  // PrimeReact only re-renders a body cell when its row data changes, so the selected flag travels with the row
+  const tableRows = useMemo(() => filteredReports.map(r => ({ ...r, selected: selectedIds.has(r.id) })), [filteredReports, selectedIds])
   const allSelected  = filteredReports.length > 0 && filteredReports.every(r => selectedIds.has(r.id))
   const someSelected = filteredReports.some(r => selectedIds.has(r.id))
   const toggleAll    = () => setSelectedIds(prev => {
@@ -379,13 +380,13 @@ export default function RealTimeOperationsPage() {
       style={{ width: 14, height: 14, cursor: "pointer", accentColor: "#cc1111" }}
     />
   )
-  const checkboxBody = (row: Report) => (
+  const checkboxBody = (row: Report & { selected: boolean }) => (
     <div
       onClick={e => { e.stopPropagation(); toggleOne(row.id) }}
       style={{ display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: "4px" }}
     >
       <input type="checkbox"
-        checked={selectedIds.has(row.id)}
+        checked={row.selected}
         onChange={() => {}}
         style={{ width: 14, height: 14, cursor: "pointer", accentColor: "#cc1111", pointerEvents: "none" }}
       />
@@ -581,7 +582,7 @@ export default function RealTimeOperationsPage() {
             {/* Table panel — full width when no preview, half when preview open */}
             <div style={{ flex: previewReport ? "0 0 calc(50% - 8px)" : "1 1 100%", minWidth: 0, border: BORDER, borderRadius: 12, overflow: "hidden" }}>
               <DataTable
-                value={filteredReports}
+                value={tableRows}
                 dataKey="id"
                 size="small"
                 paginator
